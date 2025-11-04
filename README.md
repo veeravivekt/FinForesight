@@ -221,7 +221,7 @@ FinForesight/
 ## 🎯 Roadmap
 
 - [x] Phase 1: Foundation & Setup
-- [ ] Phase 2: Accounts & Transactions UI
+- [x] Phase 2: Accounts & Transactions UI
 - [ ] Phase 3: Budget System UI
 - [ ] Phase 4: Goals & Bills UI
 - [ ] Phase 5: Smart Features (Receipts, Categorization)
