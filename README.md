@@ -222,7 +222,7 @@ FinForesight/
 
 - [x] Phase 1: Foundation & Setup
 - [x] Phase 2: Accounts & Transactions UI
-- [ ] Phase 3: Budget System UI
+- [x] Phase 3: Budget System UI
 - [ ] Phase 4: Goals & Bills UI
 - [ ] Phase 5: Smart Features (Receipts, Categorization)
 - [ ] Phase 6: Reports & Export
