@@ -124,7 +124,7 @@ npm run dev:gateway
 
 1. Navigate to frontend directory:
 ```bash
-cd frontend-new
+cd frontend
 ```
 
 2. Install dependencies:
@@ -168,7 +168,7 @@ FinForesight/
 │   │   └── utils/
 │   └── gateway/
 │
-└── frontend-new/
+└── frontend/
     ├── app/
     │   ├── (auth)/
     │   ├── (dashboard)/

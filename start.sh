@@ -79,7 +79,7 @@ echo -e "${GREEN}All backend services started!${NC}"
 echo -e "${GREEN}Starting Frontend...${NC}"
 
 # Start Frontend
-cd "$PROJECT_ROOT/frontend-new"
+cd "$PROJECT_ROOT/frontend"
 npm run dev > "$PROJECT_ROOT/logs/frontend.log" 2>&1 &
 echo $! > "$PROJECT_ROOT/logs/frontend.pid"
 
