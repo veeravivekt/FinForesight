@@ -1,0 +1,137 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:7
+    container_name: finforesight-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    environment:
+      MONGO_INITDB_DATABASE: finforesight
+    networks:
+      - finforesight-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: finforesight-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - finforesight-network
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: services/auth-service/Dockerfile
+    container_name: finforesight-auth
+    ports:
+      - "3001:3001"
+    environment:
+      - MONGO_URL=mongodb://mongodb:27017/finforesight
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=${JWT_SECRET:-change-this-secret-key}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-change-this-refresh-secret-key}
+      - AUTH_SERVICE_PORT=3001
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:5173}
+    depends_on:
+      - mongodb
+      - redis
+    networks:
+      - finforesight-network
+
+  transaction-service:
+    build:
+      context: .
+      dockerfile: services/transaction-service/Dockerfile
+    container_name: finforesight-transaction
+    ports:
+      - "3002:3002"
+    environment:
+      - MONGO_URL=mongodb://mongodb:27017/finforesight
+      - REDIS_URL=redis://redis:6379
+      - TRANSACTION_SERVICE_PORT=3002
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:5173}
+    depends_on:
+      - mongodb
+      - redis
+    networks:
+      - finforesight-network
+
+  ml-service-python:
+    build:
+      context: services/ml-service
+      dockerfile: Dockerfile.python
+    container_name: finforesight-ml-python
+    ports:
+      - "5000:5000"
+    volumes:
+      - ml_models:/app/models
+    networks:
+      - finforesight-network
+
+  ml-service:
+    build:
+      context: .
+      dockerfile: services/ml-service/Dockerfile
+    container_name: finforesight-ml
+    ports:
+      - "3003:3003"
+    environment:
+      - MONGO_URL=mongodb://mongodb:27017/finforesight
+      - PYTHON_ML_SERVICE_URL=http://ml-service-python:5000
+      - ML_SERVICE_PORT=3003
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:5173}
+    depends_on:
+      - mongodb
+      - ml-service-python
+    networks:
+      - finforesight-network
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: services/notification-service/Dockerfile
+    container_name: finforesight-notification
+    ports:
+      - "3004:3004"
+    environment:
+      - NOTIFICATION_SERVICE_PORT=3004
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:5173}
+    networks:
+      - finforesight-network
+
+  gateway:
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+    container_name: finforesight-gateway
+    ports:
+      - "3000:3000"
+    environment:
+      - GATEWAY_PORT=3000
+      - AUTH_SERVICE_URL=http://auth-service:3001
+      - TRANSACTION_SERVICE_URL=http://transaction-service:3002
+      - ML_SERVICE_URL=http://ml-service:3003
+      - NOTIFICATION_SERVICE_URL=http://notification-service:3004
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:5173}
+    depends_on:
+      - auth-service
+      - transaction-service
+      - ml-service
+      - notification-service
+    networks:
+      - finforesight-network
+
+volumes:
+  mongodb_data:
+  redis_data:
+  ml_models:
+
+networks:
+  finforesight-network:
+    driver: bridge
+
