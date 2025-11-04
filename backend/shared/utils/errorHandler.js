@@ -2,6 +2,8 @@
  * Standardized error handler utility for consistent error responses across all services
  */
 
+import logger from "./logger.js";
+
 /**
  * Send a standardized error response
  * @param {Object} res - Express response object
@@ -84,8 +86,8 @@ export const sendInternalError = (res, message = "Internal server error") => {
 export const asyncHandler = (fn) => {
   return (req, res, next) => {
     Promise.resolve(fn(req, res, next)).catch((error) => {
-      // Log error (will be replaced with proper logger later)
-      console.error("Route handler error:", error);
+      // Log error
+      logger.error("Route handler error:", error);
       
       // Send standardized error response
       sendInternalError(res, "Internal server error");

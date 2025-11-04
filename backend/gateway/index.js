@@ -6,11 +6,14 @@ import morgan from "morgan";
 import { authenticate } from "../shared/middleware/auth.js";
 import { createRateLimiter } from "../shared/middleware/rateLimiter.js";
 import axios from "axios";
+import { createServiceLogger } from "../shared/utils/logger.js";
+import { sendInternalError } from "../shared/utils/errorHandler.js";
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.GATEWAY_PORT || 3000;
+const serviceLogger = createServiceLogger("api-gateway");
 
 // Service URLs
 const AUTH_SERVICE = process.env.AUTH_SERVICE_URL || "http://localhost:3001";
@@ -43,7 +46,7 @@ const proxyRequest = async (serviceUrl, req, res, servicePathPrefix = "") => {
     // We need to prepend the service-specific prefix
     const targetPath = servicePathPrefix + req.path;
     
-    console.log(`Proxying ${req.method} ${req.originalUrl} -> ${serviceUrl}${targetPath}`);
+    serviceLogger.debug(`Proxying ${req.method} ${req.originalUrl} -> ${serviceUrl}${targetPath}`);
     
     const response = await axios({
       method: req.method,
@@ -59,8 +62,8 @@ const proxyRequest = async (serviceUrl, req, res, servicePathPrefix = "") => {
 
     res.status(response.status).json(response.data);
   } catch (error) {
-    console.error("Proxy error:", error.message);
-    res.status(500).json({ error: "Service unavailable" });
+    serviceLogger.error("Proxy error:", error);
+    sendInternalError(res);
   }
 };
 
@@ -69,7 +72,7 @@ const proxyStaticFile = async (serviceUrl, req, res, servicePathPrefix = "") => 
   try {
     const targetPath = servicePathPrefix + req.path;
     
-    console.log(`Proxying static file ${req.method} ${req.originalUrl} -> ${serviceUrl}${targetPath}`);
+    serviceLogger.debug(`Proxying static file ${req.method} ${req.originalUrl} -> ${serviceUrl}${targetPath}`);
     
     const response = await axios({
       method: req.method,
@@ -91,8 +94,8 @@ const proxyStaticFile = async (serviceUrl, req, res, servicePathPrefix = "") => 
     
     res.status(response.status).send(Buffer.from(response.data));
   } catch (error) {
-    console.error("Static file proxy error:", error.message);
-    res.status(500).json({ error: "Service unavailable" });
+    serviceLogger.error("Static file proxy error:", error);
+    sendInternalError(res);
   }
 };
 
@@ -148,7 +151,7 @@ app.get("/health", (req, res) => {
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`API Gateway running on port ${PORT}`);
+  serviceLogger.info(`API Gateway running on port ${PORT}`);
 });
 
 export default app;

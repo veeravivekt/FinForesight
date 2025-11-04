@@ -1,4 +1,5 @@
 import { checkRateLimit } from "../utils/redis.js";
+import logger from "../utils/logger.js";
 
 export const createRateLimiter = (limit = 100, window = 60) => {
   return async (req, res, next) => {
@@ -17,7 +18,7 @@ export const createRateLimiter = (limit = 100, window = 60) => {
       next();
     } catch (error) {
       // If Redis fails, allow the request
-      console.error("Rate limiter error:", error);
+      logger.error("Rate limiter error:", error);
       next();
     }
   };

@@ -3,8 +3,11 @@ import Budget from "../../../shared/models/Budget.js";
 import Transaction from "../../../shared/models/Transaction.js";
 import { createRateLimiter } from "../../../shared/middleware/rateLimiter.js";
 import { setCache, getCache } from "../../../shared/utils/redis.js";
+import { sendError, sendNotFoundError, sendValidationError, sendInternalError } from "../../../shared/utils/errorHandler.js";
+import { createServiceLogger } from "../../../shared/utils/logger.js";
 
 const router = express.Router();
+const logger = createServiceLogger("budget-service");
 const budgetLimiter = createRateLimiter(100, 60);
 
 // Get all budgets
@@ -48,8 +51,8 @@ router.get("/", budgetLimiter, async (req, res) => {
 
     res.json({ budgets: budgetsWithSpending });
   } catch (error) {
-    console.error("Get budgets error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    logger.error("Get budgets error:", error);
+    sendInternalError(res);
   }
 });
 
@@ -62,7 +65,7 @@ router.get("/:id", budgetLimiter, async (req, res) => {
     });
 
     if (!budget) {
-      return res.status(404).json({ error: "Budget not found" });
+      return sendNotFoundError(res, "Budget");
     }
 
     // Calculate actual spending
@@ -88,8 +91,8 @@ router.get("/:id", budgetLimiter, async (req, res) => {
       isOverBudget: actualSpending > budget.amount,
     });
   } catch (error) {
-    console.error("Get budget error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    logger.error("Get budget error:", error);
+    sendInternalError(res);
   }
 });
 
@@ -99,7 +102,7 @@ router.post("/", budgetLimiter, async (req, res) => {
     const { category, amount, period, startDate, endDate, alertThreshold } = req.body;
 
     if (!category || !amount || !startDate) {
-      return res.status(400).json({ error: "Category, amount, and startDate are required" });
+      return sendValidationError(res, "Category, amount, and startDate are required");
     }
 
     // Check for existing active budget for this category
@@ -115,7 +118,7 @@ router.post("/", budgetLimiter, async (req, res) => {
     });
 
     if (existingBudget) {
-      return res.status(400).json({ error: "Active budget already exists for this category" });
+      return sendError(res, 400, "Active budget already exists for this category", "VALIDATION_ERROR");
     }
 
     const budget = new Budget({
@@ -132,8 +135,8 @@ router.post("/", budgetLimiter, async (req, res) => {
 
     res.status(201).json(budget);
   } catch (error) {
-    console.error("Create budget error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    logger.error("Create budget error:", error);
+    sendInternalError(res);
   }
 });
 
@@ -147,13 +150,13 @@ router.put("/:id", budgetLimiter, async (req, res) => {
     );
 
     if (!budget) {
-      return res.status(404).json({ error: "Budget not found" });
+      return sendNotFoundError(res, "Budget");
     }
 
     res.json(budget);
   } catch (error) {
-    console.error("Update budget error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    logger.error("Update budget error:", error);
+    sendInternalError(res);
   }
 });
 
@@ -166,13 +169,13 @@ router.delete("/:id", budgetLimiter, async (req, res) => {
     });
 
     if (!budget) {
-      return res.status(404).json({ error: "Budget not found" });
+      return sendNotFoundError(res, "Budget");
     }
 
     res.json({ message: "Budget deleted successfully" });
   } catch (error) {
-    console.error("Delete budget error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    logger.error("Delete budget error:", error);
+    sendInternalError(res);
   }
 });
 
@@ -219,8 +222,8 @@ router.get("/summary/overview", budgetLimiter, async (req, res) => {
 
     res.json({ summary });
   } catch (error) {
-    console.error("Get budget summary error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    logger.error("Get budget summary error:", error);
+    sendInternalError(res);
   }
 });
 

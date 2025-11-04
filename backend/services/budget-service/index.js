@@ -1,16 +1,18 @@
 import express from "express";
-import mongoose from "mongoose";
 import cors from "cors";
 import dotenv from "dotenv";
 import helmet from "helmet";
 import morgan from "morgan";
 import budgetRoutes from "./routes/budget.js";
 import { authenticate } from "../../shared/middleware/auth.js";
+import { connectDB } from "../../shared/utils/database.js";
+import { createServiceLogger } from "../../shared/utils/logger.js";
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.BUDGET_SERVICE_PORT || 3006;
+const serviceLogger = createServiceLogger("budget-service");
 
 // Middleware
 app.use(express.json());
@@ -30,26 +32,17 @@ app.get("/health", (req, res) => {
   res.json({ status: "ok", service: "budget-service" });
 });
 
-// MongoDB connection
-const connectDB = async () => {
-  try {
-    await mongoose.connect(process.env.MONGO_URL, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
-    console.log("Budget Service: MongoDB connected");
-  } catch (error) {
-    console.error("Budget Service: MongoDB connection error:", error);
-    process.exit(1);
-  }
-};
-
 // Start server
 const startServer = async () => {
-  await connectDB();
-  app.listen(PORT, () => {
-    console.log(`Budget Service running on port ${PORT}`);
-  });
+  try {
+    await connectDB();
+    app.listen(PORT, () => {
+      serviceLogger.info(`Budget Service running on port ${PORT}`);
+    });
+  } catch (error) {
+    serviceLogger.error("Failed to start Budget Service:", error);
+    process.exit(1);
+  }
 };
 
 startServer();

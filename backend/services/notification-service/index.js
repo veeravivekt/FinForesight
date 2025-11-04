@@ -6,6 +6,8 @@ import dotenv from "dotenv";
 import helmet from "helmet";
 import morgan from "morgan";
 import { authenticate } from "../../shared/middleware/auth.js";
+import { createServiceLogger } from "../../shared/utils/logger.js";
+import { sendError } from "../../shared/utils/errorHandler.js";
 
 dotenv.config();
 
@@ -19,6 +21,7 @@ const io = new Server(server, {
 });
 
 const PORT = process.env.NOTIFICATION_SERVICE_PORT || 3004;
+const serviceLogger = createServiceLogger("notification-service");
 
 // Middleware
 app.use(express.json());
@@ -44,7 +47,7 @@ io.use((socket, next) => {
 
 // WebSocket connection handling
 io.on("connection", (socket) => {
-  console.log(`User connected: ${socket.userId}`);
+  serviceLogger.info(`User connected: ${socket.userId}`);
 
   // Join user's personal room
   socket.join(`user:${socket.userId}`);
@@ -66,7 +69,7 @@ io.on("connection", (socket) => {
   });
 
   socket.on("disconnect", () => {
-    console.log(`User disconnected: ${socket.userId}`);
+    serviceLogger.info(`User disconnected: ${socket.userId}`);
   });
 });
 
@@ -75,7 +78,7 @@ app.post("/notify", authenticate, (req, res) => {
   const { userId, event, data } = req.body;
 
   if (!userId || !event) {
-    return res.status(400).json({ error: "userId and event are required" });
+    return sendError(res, 400, "userId and event are required", "VALIDATION_ERROR");
   }
 
   io.to(`user:${userId}`).emit(event, data);
@@ -88,7 +91,7 @@ app.get("/health", (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`Notification Service running on port ${PORT}`);
+  serviceLogger.info(`Notification Service running on port ${PORT}`);
 });
 
 export default app;

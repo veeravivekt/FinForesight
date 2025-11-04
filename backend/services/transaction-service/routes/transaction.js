@@ -5,8 +5,10 @@ import { validateTransaction } from "../../../shared/utils/validation.js";
 import { createRateLimiter } from "../../../shared/middleware/rateLimiter.js";
 import { setCache, getCache } from "../../../shared/utils/redis.js";
 import { sendError, sendNotFoundError, sendValidationError, sendInternalError } from "../../../shared/utils/errorHandler.js";
+import { createServiceLogger } from "../../../shared/utils/logger.js";
 
 const router = express.Router();
+const logger = createServiceLogger("transaction-service");
 
 // Rate limiter
 const transactionLimiter = createRateLimiter(100, 60); // 100 requests per minute
@@ -67,7 +69,7 @@ router.get("/", transactionLimiter, async (req, res) => {
 
     res.json(result);
   } catch (error) {
-    console.error("Get transactions error:", error);
+    logger.error("Get transactions error:", error);
     sendInternalError(res);
   }
 });
@@ -86,7 +88,7 @@ router.get("/:id", transactionLimiter, async (req, res) => {
 
     res.json(transaction);
   } catch (error) {
-    console.error("Get transaction error:", error);
+    logger.error("Get transaction error:", error);
     sendInternalError(res);
   }
 });
@@ -132,7 +134,7 @@ router.post("/", transactionLimiter, async (req, res) => {
 
     res.status(201).json(transaction);
   } catch (error) {
-    console.error("Create transaction error:", error);
+    logger.error("Create transaction error:", error);
     sendInternalError(res);
   }
 });
@@ -156,7 +158,7 @@ router.put("/:id", transactionLimiter, async (req, res) => {
 
     res.json(transaction);
   } catch (error) {
-    console.error("Update transaction error:", error);
+    logger.error("Update transaction error:", error);
     sendInternalError(res);
   }
 });
@@ -179,7 +181,7 @@ router.delete("/:id", transactionLimiter, async (req, res) => {
 
     res.json({ message: "Transaction deleted successfully" });
   } catch (error) {
-    console.error("Delete transaction error:", error);
+    logger.error("Delete transaction error:", error);
     sendInternalError(res);
   }
 });
@@ -252,7 +254,7 @@ router.get("/stats/summary", transactionLimiter, async (req, res) => {
 
     res.json(result);
   } catch (error) {
-    console.error("Get stats error:", error);
+    logger.error("Get stats error:", error);
     sendInternalError(res);
   }
 });

@@ -1,15 +1,16 @@
 import redis from "redis";
+import logger from "./logger.js";
 
 const redisClient = redis.createClient({
   url: process.env.REDIS_URL || "redis://localhost:6379",
 });
 
 redisClient.on("error", (err) => {
-  console.error("Redis Client Error:", err);
+  logger.error("Redis Client Error:", err);
 });
 
 redisClient.on("connect", () => {
-  console.log("Redis Client Connected");
+  logger.info("Redis Client Connected");
 });
 
 // Connect to Redis
@@ -17,7 +18,7 @@ const connectRedis = async () => {
   try {
     await redisClient.connect();
   } catch (error) {
-    console.error("Redis connection error:", error);
+    logger.error("Redis connection error:", error);
   }
 };
 

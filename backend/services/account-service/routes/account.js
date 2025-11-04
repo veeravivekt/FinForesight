@@ -2,8 +2,11 @@ import express from "express";
 import Account from "../../../shared/models/Account.js";
 import Transaction from "../../../shared/models/Transaction.js";
 import { createRateLimiter } from "../../../shared/middleware/rateLimiter.js";
+import { sendError, sendNotFoundError, sendValidationError, sendInternalError } from "../../../shared/utils/errorHandler.js";
+import { createServiceLogger } from "../../../shared/utils/logger.js";
 
 const router = express.Router();
+const logger = createServiceLogger("account-service");
 const accountLimiter = createRateLimiter(100, 60);
 
 // Get all accounts
@@ -33,8 +36,8 @@ router.get("/", accountLimiter, async (req, res) => {
 
     res.json({ accounts: accountsWithBalances });
   } catch (error) {
-    console.error("Get accounts error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    logger.error("Get accounts error:", error);
+    sendInternalError(res);
   }
 });
 
@@ -47,7 +50,7 @@ router.get("/:id", accountLimiter, async (req, res) => {
     });
 
     if (!account) {
-      return res.status(404).json({ error: "Account not found" });
+      return sendNotFoundError(res, "Account");
     }
 
     // Calculate balance
@@ -63,8 +66,8 @@ router.get("/:id", accountLimiter, async (req, res) => {
       calculatedBalance: balance,
     });
   } catch (error) {
-    console.error("Get account error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    logger.error("Get account error:", error);
+    sendInternalError(res);
   }
 });
 
@@ -74,7 +77,7 @@ router.post("/", accountLimiter, async (req, res) => {
     const { name, type, balance, currency, institution, accountNumber, color } = req.body;
 
     if (!name || !type) {
-      return res.status(400).json({ error: "Name and type are required" });
+      return sendValidationError(res, "Name and type are required");
     }
 
     const account = new Account({
@@ -92,8 +95,8 @@ router.post("/", accountLimiter, async (req, res) => {
 
     res.status(201).json(account);
   } catch (error) {
-    console.error("Create account error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    logger.error("Create account error:", error);
+    sendInternalError(res);
   }
 });
 
@@ -107,13 +110,13 @@ router.put("/:id", accountLimiter, async (req, res) => {
     );
 
     if (!account) {
-      return res.status(404).json({ error: "Account not found" });
+      return sendNotFoundError(res, "Account");
     }
 
     res.json(account);
   } catch (error) {
-    console.error("Update account error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    logger.error("Update account error:", error);
+    sendInternalError(res);
   }
 });
 
@@ -127,13 +130,13 @@ router.delete("/:id", accountLimiter, async (req, res) => {
     );
 
     if (!account) {
-      return res.status(404).json({ error: "Account not found" });
+      return sendNotFoundError(res, "Account");
     }
 
     res.json({ message: "Account archived successfully" });
   } catch (error) {
-    console.error("Delete account error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    logger.error("Delete account error:", error);
+    sendInternalError(res);
   }
 });
 
@@ -143,7 +146,7 @@ router.post("/transfer", accountLimiter, async (req, res) => {
     const { fromAccountId, toAccountId, amount, description, date } = req.body;
 
     if (!fromAccountId || !toAccountId || !amount || amount <= 0) {
-      return res.status(400).json({ error: "Invalid transfer data" });
+      return sendValidationError(res, "Invalid transfer data");
     }
 
     // Verify accounts belong to user
@@ -157,11 +160,11 @@ router.post("/transfer", accountLimiter, async (req, res) => {
     });
 
     if (!fromAccount || !toAccount) {
-      return res.status(404).json({ error: "Account not found" });
+      return sendNotFoundError(res, "Account");
     }
 
     if (fromAccountId === toAccountId) {
-      return res.status(400).json({ error: "Cannot transfer to same account" });
+      return sendError(res, 400, "Cannot transfer to same account", "VALIDATION_ERROR");
     }
 
     // Create transfer transactions
@@ -195,8 +198,8 @@ router.post("/transfer", accountLimiter, async (req, res) => {
       transactions: [expenseTransaction, incomeTransaction],
     });
   } catch (error) {
-    console.error("Transfer error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    logger.error("Transfer error:", error);
+    sendInternalError(res);
   }
 });
 
@@ -213,7 +216,7 @@ router.get("/:id/transactions", accountLimiter, async (req, res) => {
     });
 
     if (!account) {
-      return res.status(404).json({ error: "Account not found" });
+      return sendNotFoundError(res, "Account");
     }
 
     const transactions = await Transaction.find({ accountId: req.params.id })
@@ -234,8 +237,8 @@ router.get("/:id/transactions", accountLimiter, async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Get account transactions error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    logger.error("Get account transactions error:", error);
+    sendInternalError(res);
   }
 });
 

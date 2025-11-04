@@ -2,8 +2,11 @@ import express from "express";
 import Goal from "../../../shared/models/Goal.js";
 import Transaction from "../../../shared/models/Transaction.js";
 import { createRateLimiter } from "../../../shared/middleware/rateLimiter.js";
+import { sendError, sendNotFoundError, sendValidationError, sendInternalError } from "../../../shared/utils/errorHandler.js";
+import { createServiceLogger } from "../../../shared/utils/logger.js";
 
 const router = express.Router();
+const logger = createServiceLogger("goal-service");
 const goalLimiter = createRateLimiter(100, 60);
 
 // Get all goals
@@ -33,8 +36,8 @@ router.get("/", goalLimiter, async (req, res) => {
 
     res.json({ goals: goalsWithProgress });
   } catch (error) {
-    console.error("Get goals error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    logger.error("Get goals error:", error);
+    sendInternalError(res);
   }
 });
 
@@ -47,7 +50,7 @@ router.get("/:id", goalLimiter, async (req, res) => {
     }).populate("accountId", "name");
 
     if (!goal) {
-      return res.status(404).json({ error: "Goal not found" });
+      return sendNotFoundError(res, "Goal");
     }
 
     // Get related transactions
@@ -65,8 +68,8 @@ router.get("/:id", goalLimiter, async (req, res) => {
       recentTransactions: transactions,
     });
   } catch (error) {
-    console.error("Get goal error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    logger.error("Get goal error:", error);
+    sendInternalError(res);
   }
 });
 
@@ -76,7 +79,7 @@ router.post("/", goalLimiter, async (req, res) => {
     const { name, description, targetAmount, targetDate, accountId, color } = req.body;
 
     if (!name || !targetAmount || !targetDate) {
-      return res.status(400).json({ error: "Name, targetAmount, and targetDate are required" });
+      return sendValidationError(res, "Name, targetAmount, and targetDate are required");
     }
 
     const goal = new Goal({
@@ -94,8 +97,8 @@ router.post("/", goalLimiter, async (req, res) => {
 
     res.status(201).json(goal);
   } catch (error) {
-    console.error("Create goal error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    logger.error("Create goal error:", error);
+    sendInternalError(res);
   }
 });
 
@@ -108,7 +111,7 @@ router.put("/:id", goalLimiter, async (req, res) => {
     });
 
     if (!goal) {
-      return res.status(404).json({ error: "Goal not found" });
+      return sendNotFoundError(res, "Goal");
     }
 
     // Check if goal should be marked as completed
@@ -128,8 +131,8 @@ router.put("/:id", goalLimiter, async (req, res) => {
 
     res.json(updatedGoal);
   } catch (error) {
-    console.error("Update goal error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    logger.error("Update goal error:", error);
+    sendInternalError(res);
   }
 });
 
@@ -142,13 +145,13 @@ router.delete("/:id", goalLimiter, async (req, res) => {
     });
 
     if (!goal) {
-      return res.status(404).json({ error: "Goal not found" });
+      return sendNotFoundError(res, "Goal");
     }
 
     res.json({ message: "Goal deleted successfully" });
   } catch (error) {
-    console.error("Delete goal error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    logger.error("Delete goal error:", error);
+    sendInternalError(res);
   }
 });
 
@@ -158,7 +161,7 @@ router.post("/:id/contribute", goalLimiter, async (req, res) => {
     const { amount, transactionId } = req.body;
 
     if (!amount || amount <= 0) {
-      return res.status(400).json({ error: "Valid amount is required" });
+      return sendValidationError(res, "Valid amount is required");
     }
 
     const goal = await Goal.findOne({
@@ -167,11 +170,11 @@ router.post("/:id/contribute", goalLimiter, async (req, res) => {
     });
 
     if (!goal) {
-      return res.status(404).json({ error: "Goal not found" });
+      return sendNotFoundError(res, "Goal");
     }
 
     if (goal.isCompleted) {
-      return res.status(400).json({ error: "Goal is already completed" });
+      return sendError(res, 400, "Goal is already completed", "VALIDATION_ERROR");
     }
 
     const newAmount = goal.currentAmount + amount;
@@ -198,8 +201,8 @@ router.post("/:id/contribute", goalLimiter, async (req, res) => {
 
     res.json(updatedGoal);
   } catch (error) {
-    console.error("Contribute to goal error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    logger.error("Contribute to goal error:", error);
+    sendInternalError(res);
   }
 });
 

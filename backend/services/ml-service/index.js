@@ -7,12 +7,15 @@ import axios from "axios";
 import { authenticate } from "../../shared/middleware/auth.js";
 import { createRateLimiter } from "../../shared/middleware/rateLimiter.js";
 import Transaction from "../../shared/models/Transaction.js";
-import mongoose from "mongoose";
+import { connectDB } from "../../shared/utils/database.js";
+import { createServiceLogger } from "../../shared/utils/logger.js";
+import { sendError, sendInternalError } from "../../shared/utils/errorHandler.js";
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.ML_SERVICE_PORT || 3003;
+const serviceLogger = createServiceLogger("ml-service");
 
 // Python ML Service URL (if running separately)
 const PYTHON_ML_SERVICE = process.env.PYTHON_ML_SERVICE_URL || "http://localhost:5000";
@@ -30,27 +33,13 @@ app.use(cors({
 // Rate limiter
 const mlLimiter = createRateLimiter(50, 60); // 50 requests per minute
 
-// MongoDB connection
-const connectDB = async () => {
-  try {
-    await mongoose.connect(process.env.MONGO_URL, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
-    console.log("ML Service: MongoDB connected");
-  } catch (error) {
-    console.error("ML Service: MongoDB connection error:", error);
-    process.exit(1);
-  }
-};
-
 // Fraud detection endpoint
 app.post("/fraud/detect", authenticate, mlLimiter, async (req, res) => {
   try {
     const { transaction } = req.body;
 
     if (!transaction) {
-      return res.status(400).json({ error: "Transaction data is required" });
+      return sendError(res, 400, "Transaction data is required", "VALIDATION_ERROR");
     }
 
     // Get user's transaction history for context
@@ -78,7 +67,7 @@ app.post("/fraud/detect", authenticate, mlLimiter, async (req, res) => {
       });
     } catch (error) {
       // Fallback to simple rule-based detection if ML service unavailable
-      console.error("ML service error, using fallback:", error);
+      serviceLogger.warn("ML service error, using fallback:", error);
       const fraudScore = simpleFraudDetection(transaction, userTransactions);
       const isFraudulent = fraudScore > 0.7;
 
@@ -90,8 +79,8 @@ app.post("/fraud/detect", authenticate, mlLimiter, async (req, res) => {
       });
     }
   } catch (error) {
-    console.error("Fraud detection error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    serviceLogger.error("Fraud detection error:", error);
+    sendInternalError(res);
   }
 });
 
@@ -107,7 +96,7 @@ app.post("/predict/spend", authenticate, mlLimiter, async (req, res) => {
     }).sort({ date: -1 }).limit(1000);
 
     if (transactions.length < 10) {
-      return res.status(400).json({ error: "Insufficient transaction history" });
+      return sendError(res, 400, "Insufficient transaction history", "VALIDATION_ERROR");
     }
 
     try {
@@ -127,7 +116,7 @@ app.post("/predict/spend", authenticate, mlLimiter, async (req, res) => {
       });
     } catch (error) {
       // Fallback to simple average-based prediction
-      console.error("ML service error, using fallback:", error);
+      serviceLogger.warn("ML service error, using fallback:", error);
       const predictions = simpleSpendPrediction(transactions, months);
 
       res.json({
@@ -137,8 +126,8 @@ app.post("/predict/spend", authenticate, mlLimiter, async (req, res) => {
       });
     }
   } catch (error) {
-    console.error("Spend prediction error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    serviceLogger.error("Spend prediction error:", error);
+    sendInternalError(res);
   }
 });
 
@@ -149,8 +138,8 @@ app.post("/train", authenticate, async (req, res) => {
     const response = await axios.post(`${PYTHON_ML_SERVICE}/train`, req.body);
     res.json(response.data);
   } catch (error) {
-    console.error("Model training error:", error);
-    res.status(500).json({ error: "Training service unavailable" });
+    serviceLogger.error("Model training error:", error);
+    sendError(res, 500, "Training service unavailable", "SERVICE_UNAVAILABLE");
   }
 });
 
@@ -252,10 +241,15 @@ app.get("/health", (req, res) => {
 
 // Start server
 const startServer = async () => {
-  await connectDB();
-  app.listen(PORT, () => {
-    console.log(`ML Service running on port ${PORT}`);
-  });
+  try {
+    await connectDB();
+    app.listen(PORT, () => {
+      serviceLogger.info(`ML Service running on port ${PORT}`);
+    });
+  } catch (error) {
+    serviceLogger.error("Failed to start ML Service:", error);
+    process.exit(1);
+  }
 };
 
 startServer();

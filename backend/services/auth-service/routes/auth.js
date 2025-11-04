@@ -6,8 +6,11 @@ import { setSession, getSession, deleteSession } from "../../../shared/utils/red
 import { validateEmail, validatePassword, sanitizeInput } from "../../../shared/utils/validation.js";
 import { createRateLimiter } from "../../../shared/middleware/rateLimiter.js";
 import { authenticate } from "../../../shared/middleware/auth.js";
+import { sendError, sendInternalError, sendUnauthorizedError, sendNotFoundError, sendValidationError } from "../../../shared/utils/errorHandler.js";
+import { createServiceLogger } from "../../../shared/utils/logger.js";
 
 const router = express.Router();
+const logger = createServiceLogger("auth-service");
 
 // Rate limiters
 const registerLimiter = createRateLimiter(5, 15 * 60); // 5 attempts per 15 minutes
@@ -20,21 +23,21 @@ router.post("/register", registerLimiter, async (req, res) => {
 
     // Validation
     if (!name || !email || !password) {
-      return res.status(400).json({ error: "Name, email, and password are required" });
+      return sendValidationError(res, "Name, email, and password are required");
     }
 
     if (!validateEmail(email)) {
-      return res.status(400).json({ error: "Invalid email format" });
+      return sendValidationError(res, "Invalid email format");
     }
 
     if (!validatePassword(password)) {
-      return res.status(400).json({ error: "Password must be at least 6 characters" });
+      return sendValidationError(res, "Password must be at least 6 characters");
     }
 
     // Check if user exists
     const existingUser = await User.findOne({ email: sanitizeInput(email.toLowerCase()) });
     if (existingUser) {
-      return res.status(400).json({ error: "User already exists" });
+      return sendError(res, 400, "User already exists", "USER_EXISTS");
     }
 
     // Create user
@@ -64,8 +67,8 @@ router.post("/register", registerLimiter, async (req, res) => {
       refreshToken,
     });
   } catch (error) {
-    console.error("Registration error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    logger.error("Registration error:", error);
+    sendInternalError(res);
   }
 });
 
@@ -75,19 +78,19 @@ router.post("/login", loginLimiter, async (req, res) => {
     const { email, password } = req.body;
 
     if (!email || !password) {
-      return res.status(400).json({ error: "Email and password are required" });
+      return sendValidationError(res, "Email and password are required");
     }
 
     // Find user
     const user = await User.findOne({ email: sanitizeInput(email.toLowerCase()) });
     if (!user) {
-      return res.status(401).json({ error: "Invalid credentials" });
+      return sendUnauthorizedError(res, "Invalid credentials");
     }
 
     // Check password
     const isPasswordValid = await user.comparePassword(password);
     if (!isPasswordValid) {
-      return res.status(401).json({ error: "Invalid credentials" });
+      return sendUnauthorizedError(res, "Invalid credentials");
     }
 
     // Generate tokens
@@ -108,8 +111,8 @@ router.post("/login", loginLimiter, async (req, res) => {
       refreshToken,
     });
   } catch (error) {
-    console.error("Login error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    logger.error("Login error:", error);
+    sendInternalError(res);
   }
 });
 
@@ -119,19 +122,19 @@ router.post("/refresh", async (req, res) => {
     const { refreshToken } = req.body;
 
     if (!refreshToken) {
-      return res.status(400).json({ error: "Refresh token is required" });
+      return sendValidationError(res, "Refresh token is required");
     }
 
     // Verify refresh token
     const decoded = verifyRefreshToken(refreshToken);
     if (!decoded) {
-      return res.status(401).json({ error: "Invalid refresh token" });
+      return sendUnauthorizedError(res, "Invalid refresh token");
     }
 
     // Check if session exists in Redis
     const storedToken = await getSession(decoded.userId);
     if (storedToken !== refreshToken) {
-      return res.status(401).json({ error: "Invalid refresh token" });
+      return sendUnauthorizedError(res, "Invalid refresh token");
     }
 
     // Generate new tokens
@@ -145,8 +148,8 @@ router.post("/refresh", async (req, res) => {
       refreshToken: newRefreshToken,
     });
   } catch (error) {
-    console.error("Refresh token error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    logger.error("Refresh token error:", error);
+    sendInternalError(res);
   }
 });
 
@@ -156,8 +159,8 @@ router.post("/logout", authenticate, async (req, res) => {
     await deleteSession(req.userId);
     res.json({ message: "Logout successful" });
   } catch (error) {
-    console.error("Logout error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    logger.error("Logout error:", error);
+    sendInternalError(res);
   }
 });
 
@@ -166,12 +169,12 @@ router.get("/me", authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId).select("-password");
     if (!user) {
-      return res.status(404).json({ error: "User not found" });
+      return sendNotFoundError(res, "User");
     }
     res.json({ user });
   } catch (error) {
-    console.error("Get user error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    logger.error("Get user error:", error);
+    sendInternalError(res);
   }
 });
 

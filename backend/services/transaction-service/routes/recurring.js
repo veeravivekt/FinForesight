@@ -1,8 +1,11 @@
 import express from "express";
 import RecurringTransaction from "../../../shared/models/RecurringTransaction.js";
 import { createRateLimiter } from "../../../shared/middleware/rateLimiter.js";
+import { sendNotFoundError, sendValidationError, sendInternalError } from "../../../shared/utils/errorHandler.js";
+import { createServiceLogger } from "../../../shared/utils/logger.js";
 
 const router = express.Router();
+const logger = createServiceLogger("transaction-service");
 const recurringLimiter = createRateLimiter(100, 60);
 
 // Get all recurring transactions
@@ -21,8 +24,8 @@ router.get("/", recurringLimiter, async (req, res) => {
 
     res.json({ recurringTransactions });
   } catch (error) {
-    console.error("Get recurring transactions error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    logger.error("Get recurring transactions error:", error);
+    sendInternalError(res);
   }
 });
 
@@ -35,13 +38,13 @@ router.get("/:id", recurringLimiter, async (req, res) => {
     }).populate("accountId", "name type");
 
     if (!recurringTransaction) {
-      return res.status(404).json({ error: "Recurring transaction not found" });
+      return sendNotFoundError(res, "Recurring transaction");
     }
 
     res.json(recurringTransaction);
   } catch (error) {
-    console.error("Get recurring transaction error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    logger.error("Get recurring transaction error:", error);
+    sendInternalError(res);
   }
 });
 
@@ -63,7 +66,7 @@ router.post("/", recurringLimiter, async (req, res) => {
     } = req.body;
 
     if (!accountId || !description || !amount || !category || !type || !nextDueDate) {
-      return res.status(400).json({ error: "Required fields are missing" });
+      return sendValidationError(res, "Required fields are missing");
     }
 
     // Verify account belongs to user
@@ -74,7 +77,7 @@ router.post("/", recurringLimiter, async (req, res) => {
     });
 
     if (!account) {
-      return res.status(404).json({ error: "Account not found" });
+      return sendNotFoundError(res, "Account");
     }
 
     const recurringTransaction = new RecurringTransaction({
@@ -97,8 +100,8 @@ router.post("/", recurringLimiter, async (req, res) => {
 
     res.status(201).json(recurringTransaction);
   } catch (error) {
-    console.error("Create recurring transaction error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    logger.error("Create recurring transaction error:", error);
+    sendInternalError(res);
   }
 });
 
@@ -112,13 +115,13 @@ router.put("/:id", recurringLimiter, async (req, res) => {
     );
 
     if (!recurringTransaction) {
-      return res.status(404).json({ error: "Recurring transaction not found" });
+      return sendNotFoundError(res, "Recurring transaction");
     }
 
     res.json(recurringTransaction);
   } catch (error) {
-    console.error("Update recurring transaction error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    logger.error("Update recurring transaction error:", error);
+    sendInternalError(res);
   }
 });
 
@@ -131,13 +134,13 @@ router.delete("/:id", recurringLimiter, async (req, res) => {
     });
 
     if (!recurringTransaction) {
-      return res.status(404).json({ error: "Recurring transaction not found" });
+      return sendNotFoundError(res, "Recurring transaction");
     }
 
     res.json({ message: "Recurring transaction deleted successfully" });
   } catch (error) {
-    console.error("Delete recurring transaction error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    logger.error("Delete recurring transaction error:", error);
+    sendInternalError(res);
   }
 });
 

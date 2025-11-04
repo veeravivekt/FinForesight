@@ -6,8 +6,11 @@ import Receipt from "../../../shared/models/Receipt.js";
 import Transaction from "../../../shared/models/Transaction.js";
 import { createRateLimiter } from "../../../shared/middleware/rateLimiter.js";
 import axios from "axios";
+import { sendError, sendNotFoundError, sendValidationError, sendInternalError } from "../../../shared/utils/errorHandler.js";
+import { createServiceLogger } from "../../../shared/utils/logger.js";
 
 const router = express.Router();
+const logger = createServiceLogger("transaction-service");
 const receiptLimiter = createRateLimiter(50, 60);
 
 // Configure multer for file uploads
@@ -56,8 +59,8 @@ router.get("/", receiptLimiter, async (req, res) => {
 
     res.json({ receipts });
   } catch (error) {
-    console.error("Get receipts error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    logger.error("Get receipts error:", error);
+    sendInternalError(res);
   }
 });
 
@@ -70,13 +73,13 @@ router.get("/:id", receiptLimiter, async (req, res) => {
     }).populate("transactionId");
 
     if (!receipt) {
-      return res.status(404).json({ error: "Receipt not found" });
+      return sendNotFoundError(res, "Receipt");
     }
 
     res.json(receipt);
   } catch (error) {
-    console.error("Get receipt error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    logger.error("Get receipt error:", error);
+    sendInternalError(res);
   }
 });
 
@@ -84,7 +87,7 @@ router.get("/:id", receiptLimiter, async (req, res) => {
 router.post("/upload", receiptLimiter, upload.single("image"), async (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ error: "No file uploaded" });
+      return sendValidationError(res, "No file uploaded");
     }
 
     const filePath = req.file.path;
@@ -118,7 +121,7 @@ router.post("/upload", receiptLimiter, upload.single("image"), async (req, res) 
         category: ocrResponse.data.category || null,
       };
     } catch (error) {
-      console.log("OCR service not available, creating receipt without OCR data");
+      logger.warn("OCR service not available, creating receipt without OCR data");
     }
 
     const receipt = new Receipt({
@@ -141,8 +144,8 @@ router.post("/upload", receiptLimiter, upload.single("image"), async (req, res) 
       message: ocrData ? "Receipt processed successfully" : "Receipt uploaded successfully (OCR processing pending)",
     });
   } catch (error) {
-    console.error("Upload receipt error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    logger.error("Upload receipt error:", error);
+    sendInternalError(res);
   }
 });
 
@@ -152,7 +155,7 @@ router.put("/:id/link", receiptLimiter, async (req, res) => {
     const { transactionId } = req.body;
 
     if (!transactionId) {
-      return res.status(400).json({ error: "Transaction ID is required" });
+      return sendValidationError(res, "Transaction ID is required");
     }
 
     // Verify transaction belongs to user
@@ -162,7 +165,7 @@ router.put("/:id/link", receiptLimiter, async (req, res) => {
     });
 
     if (!transaction) {
-      return res.status(404).json({ error: "Transaction not found" });
+      return sendNotFoundError(res, "Transaction");
     }
 
     const receipt = await Receipt.findOneAndUpdate(
@@ -172,7 +175,7 @@ router.put("/:id/link", receiptLimiter, async (req, res) => {
     );
 
     if (!receipt) {
-      return res.status(404).json({ error: "Receipt not found" });
+      return sendNotFoundError(res, "Receipt");
     }
 
     // Update transaction with receipt link
@@ -181,8 +184,8 @@ router.put("/:id/link", receiptLimiter, async (req, res) => {
 
     res.json(receipt);
   } catch (error) {
-    console.error("Link receipt error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    logger.error("Link receipt error:", error);
+    sendInternalError(res);
   }
 });
 
@@ -192,7 +195,7 @@ router.post("/categorize", receiptLimiter, async (req, res) => {
     const { description, amount, merchant } = req.body;
 
     if (!description) {
-      return res.status(400).json({ error: "Description is required" });
+      return sendValidationError(res, "Description is required");
     }
 
     // Get user's transaction history for pattern matching
@@ -256,8 +259,8 @@ router.post("/categorize", receiptLimiter, async (req, res) => {
       method: confidence > 0.7 ? "pattern_match" : "history_based",
     });
   } catch (error) {
-    console.error("Categorize error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    logger.error("Categorize error:", error);
+    sendInternalError(res);
   }
 });
 
@@ -270,7 +273,7 @@ router.delete("/:id", receiptLimiter, async (req, res) => {
     });
 
     if (!receipt) {
-      return res.status(404).json({ error: "Receipt not found" });
+      return sendNotFoundError(res, "Receipt");
     }
 
     // Delete file from filesystem
@@ -292,8 +295,8 @@ router.delete("/:id", receiptLimiter, async (req, res) => {
 
     res.json({ message: "Receipt deleted successfully" });
   } catch (error) {
-    console.error("Delete receipt error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    logger.error("Delete receipt error:", error);
+    sendInternalError(res);
   }
 });
 
