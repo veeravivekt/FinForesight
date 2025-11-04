@@ -1,15 +1,17 @@
 import express from "express";
-import mongoose from "mongoose";
 import cors from "cors";
 import dotenv from "dotenv";
 import helmet from "helmet";
 import morgan from "morgan";
 import authRoutes from "./routes/auth.js";
+import { connectDB } from "../../shared/utils/database.js";
+import logger, { createServiceLogger } from "../../shared/utils/logger.js";
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.AUTH_SERVICE_PORT || 3001;
+const serviceLogger = createServiceLogger("auth-service");
 
 // Middleware
 app.use(express.json());
@@ -29,26 +31,17 @@ app.get("/health", (req, res) => {
   res.json({ status: "ok", service: "auth-service" });
 });
 
-// MongoDB connection
-const connectDB = async () => {
-  try {
-    await mongoose.connect(process.env.MONGO_URL, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
-    console.log("Auth Service: MongoDB connected");
-  } catch (error) {
-    console.error("Auth Service: MongoDB connection error:", error);
-    process.exit(1);
-  }
-};
-
 // Start server
 const startServer = async () => {
-  await connectDB();
-  app.listen(PORT, () => {
-    console.log(`Auth Service running on port ${PORT}`);
-  });
+  try {
+    await connectDB();
+    app.listen(PORT, () => {
+      serviceLogger.info(`Auth Service running on port ${PORT}`);
+    });
+  } catch (error) {
+    serviceLogger.error("Failed to start Auth Service:", error);
+    process.exit(1);
+  }
 };
 
 startServer();

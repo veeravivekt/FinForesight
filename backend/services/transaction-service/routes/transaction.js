@@ -4,6 +4,7 @@ import Transaction from "../../../shared/models/Transaction.js";
 import { validateTransaction } from "../../../shared/utils/validation.js";
 import { createRateLimiter } from "../../../shared/middleware/rateLimiter.js";
 import { setCache, getCache } from "../../../shared/utils/redis.js";
+import { sendError, sendNotFoundError, sendValidationError, sendInternalError } from "../../../shared/utils/errorHandler.js";
 
 const router = express.Router();
 
@@ -67,7 +68,7 @@ router.get("/", transactionLimiter, async (req, res) => {
     res.json(result);
   } catch (error) {
     console.error("Get transactions error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    sendInternalError(res);
   }
 });
 
@@ -80,13 +81,13 @@ router.get("/:id", transactionLimiter, async (req, res) => {
     });
 
     if (!transaction) {
-      return res.status(404).json({ error: "Transaction not found" });
+      return sendNotFoundError(res, "Transaction");
     }
 
     res.json(transaction);
   } catch (error) {
     console.error("Get transaction error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    sendInternalError(res);
   }
 });
 
@@ -95,7 +96,7 @@ router.post("/", transactionLimiter, async (req, res) => {
   try {
     const validation = validateTransaction(req.body);
     if (!validation.isValid) {
-      return res.status(400).json({ errors: validation.errors });
+      return sendValidationError(res, validation.errors);
     }
 
     // Verify account belongs to user
@@ -106,7 +107,7 @@ router.post("/", transactionLimiter, async (req, res) => {
     });
 
     if (!account) {
-      return res.status(404).json({ error: "Account not found" });
+      return sendNotFoundError(res, "Account");
     }
 
     const transaction = new Transaction({
@@ -132,7 +133,7 @@ router.post("/", transactionLimiter, async (req, res) => {
     res.status(201).json(transaction);
   } catch (error) {
     console.error("Create transaction error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    sendInternalError(res);
   }
 });
 
@@ -146,7 +147,7 @@ router.put("/:id", transactionLimiter, async (req, res) => {
     );
 
     if (!transaction) {
-      return res.status(404).json({ error: "Transaction not found" });
+      return sendNotFoundError(res, "Transaction");
     }
 
     // Invalidate cache
@@ -156,7 +157,7 @@ router.put("/:id", transactionLimiter, async (req, res) => {
     res.json(transaction);
   } catch (error) {
     console.error("Update transaction error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    sendInternalError(res);
   }
 });
 
@@ -169,7 +170,7 @@ router.delete("/:id", transactionLimiter, async (req, res) => {
     });
 
     if (!transaction) {
-      return res.status(404).json({ error: "Transaction not found" });
+      return sendNotFoundError(res, "Transaction");
     }
 
     // Invalidate cache
@@ -179,7 +180,7 @@ router.delete("/:id", transactionLimiter, async (req, res) => {
     res.json({ message: "Transaction deleted successfully" });
   } catch (error) {
     console.error("Delete transaction error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    sendInternalError(res);
   }
 });
 
@@ -252,7 +253,7 @@ router.get("/stats/summary", transactionLimiter, async (req, res) => {
     res.json(result);
   } catch (error) {
     console.error("Get stats error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    sendInternalError(res);
   }
 });
 

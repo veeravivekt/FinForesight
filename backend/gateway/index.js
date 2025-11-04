@@ -13,7 +13,7 @@ const app = express();
 const PORT = process.env.GATEWAY_PORT || 3000;
 
 // Service URLs
-const AUTH_SERVICE = process.env.AUTH_SERVICE_URL || "http://localhost:3008";
+const AUTH_SERVICE = process.env.AUTH_SERVICE_URL || "http://localhost:3001";
 const TRANSACTION_SERVICE = process.env.TRANSACTION_SERVICE_URL || "http://localhost:3002";
 const ML_SERVICE = process.env.ML_SERVICE_URL || "http://localhost:3003";
 const NOTIFICATION_SERVICE = process.env.NOTIFICATION_SERVICE_URL || "http://localhost:3004";

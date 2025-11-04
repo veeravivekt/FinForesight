@@ -63,6 +63,15 @@ sleep 2
 start_service "notification-service" "3004" "services/notification-service/index.js"
 sleep 2
 
+start_service "account-service" "3005" "services/account-service/index.js"
+sleep 2
+
+start_service "budget-service" "3006" "services/budget-service/index.js"
+sleep 2
+
+start_service "goal-service" "3007" "services/goal-service/index.js"
+sleep 2
+
 start_service "gateway" "3000" "gateway/index.js"
 sleep 2
 
@@ -70,14 +79,14 @@ echo -e "${GREEN}All backend services started!${NC}"
 echo -e "${GREEN}Starting Frontend...${NC}"
 
 # Start Frontend
-cd "$PROJECT_ROOT/frontend"
+cd "$PROJECT_ROOT/frontend-new"
 npm run dev > "$PROJECT_ROOT/logs/frontend.log" 2>&1 &
 echo $! > "$PROJECT_ROOT/logs/frontend.pid"
 
 echo -e "${GREEN}================================${NC}"
 echo -e "${GREEN}FinForesight is running!${NC}"
 echo -e "${GREEN}================================${NC}"
-echo -e "Frontend: ${YELLOW}http://localhost:5173${NC}"
+echo -e "Frontend: ${YELLOW}http://localhost:3001${NC}"
 echo -e "API Gateway: ${YELLOW}http://localhost:3000${NC}"
 echo -e ""
 echo -e "Service Status:"
@@ -85,6 +94,9 @@ echo -e "  - Auth Service: ${GREEN}http://localhost:3001${NC}"
 echo -e "  - Transaction Service: ${GREEN}http://localhost:3002${NC}"
 echo -e "  - ML Service: ${GREEN}http://localhost:3003${NC}"
 echo -e "  - Notification Service: ${GREEN}http://localhost:3004${NC}"
+echo -e "  - Account Service: ${GREEN}http://localhost:3005${NC}"
+echo -e "  - Budget Service: ${GREEN}http://localhost:3006${NC}"
+echo -e "  - Goal Service: ${GREEN}http://localhost:3007${NC}"
 echo -e "  - Python ML Service: ${GREEN}http://localhost:5000${NC}"
 echo -e ""
 echo -e "Logs are in: ${YELLOW}$PROJECT_ROOT/logs/${NC}"
