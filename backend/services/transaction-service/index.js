@@ -4,8 +4,10 @@ import cors from "cors";
 import dotenv from "dotenv";
 import helmet from "helmet";
 import morgan from "morgan";
+import path from "path";
 import transactionRoutes from "./routes/transaction.js";
 import recurringRoutes from "./routes/recurring.js";
+import receiptRoutes from "./routes/receipt.js";
 import { authenticate } from "../../shared/middleware/auth.js";
 
 dotenv.config();
@@ -23,9 +25,13 @@ app.use(cors({
   credentials: true,
 }));
 
+// Serve uploaded receipt files
+app.use("/uploads/receipts", express.static(path.join(process.cwd(), "uploads", "receipts")));
+
 // Routes
 app.use("/transactions", authenticate, transactionRoutes);
 app.use("/recurring", authenticate, recurringRoutes);
+app.use("/receipts", authenticate, receiptRoutes);
 
 // Health check
 app.get("/health", (req, res) => {

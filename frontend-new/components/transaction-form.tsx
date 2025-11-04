@@ -1,18 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/lib/api";
-import { useMutation } from "@tanstack/react-query";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Sparkles } from "lucide-react";
 
 const transactionSchema = z.object({
   accountId: z.string().min(1, "Account is required"),
@@ -67,6 +67,12 @@ const categories = [
 
 export default function TransactionForm({ transaction, onSuccess, onCancel }: TransactionFormProps) {
   const [error, setError] = useState("");
+  const [suggestedCategory, setSuggestedCategory] = useState<string | null>(null);
+  const [categorizing, setCategorizing] = useState(false);
+  
+  // Track manual category changes and pending categorization requests
+  const categoryManuallyChangedRef = useRef(false);
+  const pendingCategorizationRef = useRef<{ description: string; categoryAtRequest: string } | null>(null);
 
   // Fetch accounts for dropdown
   const { data: accountsData } = useQuery<{ accounts: Array<{ _id: string; name: string; type: string }> }>({
@@ -115,6 +121,61 @@ export default function TransactionForm({ transaction, onSuccess, onCancel }: Tr
 
   const type = watch("type");
   const accountId = watch("accountId");
+  const description = watch("description");
+  const amount = watch("amount");
+  const currentCategory = watch("category");
+
+  // Smart categorization when description changes
+  useEffect(() => {
+    if (!transaction && description && description.length > 3 && type === "expense") {
+      // Reset manual change flag when description changes significantly
+      categoryManuallyChangedRef.current = false;
+      
+      const timeoutId = setTimeout(() => {
+        handleSmartCategorize();
+      }, 1000); // Debounce for 1 second
+
+      return () => clearTimeout(timeoutId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [description, amount, type]);
+
+  const handleSmartCategorize = async () => {
+    if (!description || type !== "expense") return;
+
+    // Store the current state when request is initiated
+    pendingCategorizationRef.current = {
+      description,
+      categoryAtRequest: currentCategory,
+    };
+
+    setCategorizing(true);
+    try {
+      const response = await api.post<{ category: string; confidence: number; method: string }>("/receipts/categorize", {
+        description,
+        amount,
+      });
+
+      // Only apply suggestion if:
+      // 1. User hasn't manually changed category since request started
+      // 2. Description hasn't changed (user hasn't typed more)
+      // 3. Category hasn't been manually changed to something different
+      const pending = pendingCategorizationRef.current;
+      const descriptionUnchanged = pending && pending.description === description;
+      const categoryUnchanged = pending && pending.categoryAtRequest === currentCategory;
+      const shouldApply = !categoryManuallyChangedRef.current && descriptionUnchanged && categoryUnchanged;
+
+      if (response.confidence > 0.5 && shouldApply) {
+        setSuggestedCategory(response.category);
+        setValue("category", response.category as TransactionFormData["category"]);
+      }
+    } catch (error) {
+      // Silently fail - categorization is optional
+    } finally {
+      setCategorizing(false);
+      pendingCategorizationRef.current = null;
+    }
+  };
 
   const createMutation = useMutation({
     mutationFn: (data: TransactionFormData) => api.post("/transactions", data),
@@ -259,10 +320,29 @@ export default function TransactionForm({ transaction, onSuccess, onCancel }: Tr
 
       {type !== "transfer" && (
         <div className="space-y-2">
-          <Label htmlFor="category">Category *</Label>
+          <div className="flex items-center justify-between">
+            <Label htmlFor="category">Category *</Label>
+            {suggestedCategory && !transaction && (
+              <div className="flex items-center gap-2 text-xs text-green-600">
+                <Sparkles className="h-3 w-3" />
+                Auto-categorized
+              </div>
+            )}
+            {categorizing && !transaction && (
+              <div className="flex items-center gap-2 text-xs text-gray-500">
+                <Sparkles className="h-3 w-3 animate-pulse" />
+                Analyzing...
+              </div>
+            )}
+          </div>
           <Select
             value={watch("category")}
-            onValueChange={(value) => setValue("category", value as TransactionFormData["category"])}
+            onValueChange={(value) => {
+              // Mark that user has manually changed category
+              categoryManuallyChangedRef.current = true;
+              setSuggestedCategory(null);
+              setValue("category", value as TransactionFormData["category"]);
+            }}
             disabled={isSubmitting}
           >
             <SelectTrigger>

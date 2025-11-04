@@ -35,7 +35,7 @@ app.use(cors({
 const gatewayLimiter = createRateLimiter(200, 60); // 200 requests per minute per IP
 app.use(gatewayLimiter);
 
-// Proxy function
+// Proxy function for API requests (JSON responses)
 const proxyRequest = async (serviceUrl, req, res, servicePathPrefix = "") => {
   try {
     // Express middleware strips the matched prefix from req.path
@@ -64,6 +64,38 @@ const proxyRequest = async (serviceUrl, req, res, servicePathPrefix = "") => {
   }
 };
 
+// Proxy function for static files (binary responses)
+const proxyStaticFile = async (serviceUrl, req, res, servicePathPrefix = "") => {
+  try {
+    const targetPath = servicePathPrefix + req.path;
+    
+    console.log(`Proxying static file ${req.method} ${req.originalUrl} -> ${serviceUrl}${targetPath}`);
+    
+    const response = await axios({
+      method: req.method,
+      url: `${serviceUrl}${targetPath}`,
+      headers: {
+        ...req.headers,
+        host: undefined,
+        authorization: req.headers.authorization, // Forward auth header
+      },
+      responseType: 'arraybuffer', // Handle binary data
+      validateStatus: () => true,
+    });
+
+    // Set appropriate headers for file serving
+    res.set({
+      'Content-Type': response.headers['content-type'] || 'application/octet-stream',
+      'Content-Length': response.headers['content-length'],
+    });
+    
+    res.status(response.status).send(Buffer.from(response.data));
+  } catch (error) {
+    console.error("Static file proxy error:", error.message);
+    res.status(500).json({ error: "Service unavailable" });
+  }
+};
+
 // Auth routes (no authentication required)
 app.use("/api/auth", (req, res) => {
   proxyRequest(AUTH_SERVICE, req, res, "/auth");
@@ -77,6 +109,16 @@ app.use("/api/transactions", authenticate, (req, res) => {
 // Recurring transactions routes (authentication required)
 app.use("/api/recurring", authenticate, (req, res) => {
   proxyRequest(TRANSACTION_SERVICE, req, res, "/recurring");
+});
+
+// Receipt routes (authentication required)
+app.use("/api/receipts", authenticate, (req, res) => {
+  proxyRequest(TRANSACTION_SERVICE, req, res, "/receipts");
+});
+
+// Static file routes for receipts (authentication required)
+app.use("/uploads", authenticate, (req, res) => {
+  proxyStaticFile(TRANSACTION_SERVICE, req, res, "/uploads");
 });
 
 // ML routes (authentication required)

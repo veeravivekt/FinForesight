@@ -224,7 +224,7 @@ FinForesight/
 - [x] Phase 2: Accounts & Transactions UI
 - [x] Phase 3: Budget System UI
 - [x] Phase 4: Goals & Bills UI
-- [ ] Phase 5: Smart Features (Receipts, Categorization)
+- [x] Phase 5: Smart Features (Receipts, Categorization)
 - [ ] Phase 6: Reports & Export
 
 ## 📝 License
