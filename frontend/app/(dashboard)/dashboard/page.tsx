@@ -3,8 +3,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Wallet, TrendingUp, TrendingDown, Target } from "lucide-react";
+import { Wallet, TrendingUp, TrendingDown, Target, ArrowUp, ArrowDown, CreditCard, Plus } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { format, startOfMonth, endOfMonth, subMonths } from "date-fns";
+import Link from "next/link";
 
 interface Account {
   _id: string;
@@ -32,6 +36,20 @@ interface Goal {
   daysRemaining: number;
 }
 
+interface Transaction {
+  _id: string;
+  accountId: {
+    _id: string;
+    name: string;
+    type: string;
+  };
+  amount: number;
+  description: string;
+  category: string;
+  type: "income" | "expense" | "transfer";
+  date: string;
+}
+
 export default function DashboardPage() {
   const { data: accountsData, isLoading: accountsLoading } = useQuery<{ accounts: Account[] }>({
     queryKey: ["accounts"],
@@ -48,13 +66,48 @@ export default function DashboardPage() {
     queryFn: () => api.get("/goals?isCompleted=false"),
   });
 
+  // Fetch recent transactions
+  const { data: transactionsData, isLoading: transactionsLoading } = useQuery<{
+    transactions: Transaction[];
+  }>({
+    queryKey: ["transactions", "recent"],
+    queryFn: () => api.get("/transactions?limit=10&page=1"),
+  });
+
+  // Fetch current month stats
+  const currentMonthStart = startOfMonth(new Date()).toISOString();
+  const currentMonthEnd = endOfMonth(new Date()).toISOString();
+  const lastMonthStart = startOfMonth(subMonths(new Date(), 1)).toISOString();
+  const lastMonthEnd = endOfMonth(subMonths(new Date(), 1)).toISOString();
+
+  const { data: currentMonthStats } = useQuery({
+    queryKey: ["transactions", "stats", "current-month"],
+    queryFn: () => api.get(`/transactions/stats/summary?startDate=${currentMonthStart}&endDate=${currentMonthEnd}`),
+  });
+
+  const { data: lastMonthStats } = useQuery({
+    queryKey: ["transactions", "stats", "last-month"],
+    queryFn: () => api.get(`/transactions/stats/summary?startDate=${lastMonthStart}&endDate=${lastMonthEnd}`),
+  });
+
   const accounts = accountsData?.accounts || [];
   const budgets = budgetsData?.budgets || [];
   const goals = goalsData?.goals || [];
+  const recentTransactions = transactionsData?.transactions || [];
 
   const totalBalance = accounts.reduce((sum, acc) => sum + (acc.calculatedBalance || 0), 0);
   const activeBudgets = budgets.length;
   const activeGoals = goals.length;
+
+  // Calculate spending comparison
+  const currentMonthSpending = currentMonthStats?.summary?.totalExpense || 0;
+  const lastMonthSpending = lastMonthStats?.summary?.totalExpense || 0;
+  const spendingChange = lastMonthSpending > 0
+    ? ((currentMonthSpending - lastMonthSpending) / lastMonthSpending) * 100
+    : 0;
+
+  // Get top spending categories
+  const topCategories = currentMonthStats?.categoryStats?.slice(0, 5) || [];
 
   return (
     <div className="space-y-6">
@@ -112,18 +165,62 @@ export default function DashboardPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Accounts</CardTitle>
-            <Wallet className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">This Month Spending</CardTitle>
+            <TrendingDown className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             {accountsLoading ? (
               <Skeleton className="h-8 w-24" />
             ) : (
-              <div className="text-2xl font-bold">{accounts.length}</div>
+              <>
+                <div className="text-2xl font-bold">${currentMonthSpending.toFixed(2)}</div>
+                <div className="flex items-center gap-1 text-xs mt-1">
+                  {spendingChange !== 0 && (
+                    <>
+                      {spendingChange > 0 ? (
+                        <ArrowUp className="h-3 w-3 text-red-600" />
+                      ) : (
+                        <ArrowDown className="h-3 w-3 text-green-600" />
+                      )}
+                      <span className={spendingChange > 0 ? "text-red-600" : "text-green-600"}>
+                        {Math.abs(spendingChange).toFixed(1)}%
+                      </span>
+                      <span className="text-muted-foreground">vs last month</span>
+                    </>
+                  )}
+                </div>
+              </>
             )}
-            <p className="text-xs text-muted-foreground">Total accounts</p>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Quick Actions */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Link href="/transactions">
+          <Button variant="outline" className="w-full h-20 flex-col gap-2">
+            <CreditCard className="h-5 w-5" />
+            <span>Add Transaction</span>
+          </Button>
+        </Link>
+        <Link href="/accounts">
+          <Button variant="outline" className="w-full h-20 flex-col gap-2">
+            <Wallet className="h-5 w-5" />
+            <span>Manage Accounts</span>
+          </Button>
+        </Link>
+        <Link href="/budgets">
+          <Button variant="outline" className="w-full h-20 flex-col gap-2">
+            <TrendingUp className="h-5 w-5" />
+            <span>Set Budget</span>
+          </Button>
+        </Link>
+        <Link href="/goals">
+          <Button variant="outline" className="w-full h-20 flex-col gap-2">
+            <Target className="h-5 w-5" />
+            <span>Create Goal</span>
+          </Button>
+        </Link>
       </div>
 
       {/* Accounts Overview */}
@@ -199,11 +296,122 @@ export default function DashboardPage() {
         </Card>
       )}
 
+      {/* Recent Transactions */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle>Recent Transactions</CardTitle>
+              <Link href="/transactions">
+                <Button variant="ghost" size="sm">View All</Button>
+              </Link>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {transactionsLoading ? (
+              <div className="space-y-2">
+                <Skeleton className="h-16 w-full" />
+                <Skeleton className="h-16 w-full" />
+                <Skeleton className="h-16 w-full" />
+              </div>
+            ) : recentTransactions.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-gray-500 mb-4">No transactions yet</p>
+                <Link href="/transactions">
+                  <Button size="sm">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Transaction
+                  </Button>
+                </Link>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {recentTransactions.slice(0, 5).map((transaction) => (
+                  <div
+                    key={transaction._id}
+                    className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                  >
+                    <div className="flex-1">
+                      <p className="font-medium text-sm">{transaction.description}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Badge variant="outline" className="text-xs">
+                          {transaction.category}
+                        </Badge>
+                        <span className="text-xs text-gray-500">
+                          {format(new Date(transaction.date), "MMM dd")}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p
+                        className={`font-bold ${
+                          transaction.type === "income"
+                            ? "text-green-600"
+                            : transaction.type === "expense"
+                            ? "text-red-600"
+                            : "text-blue-600"
+                        }`}
+                      >
+                        {transaction.type === "income" ? "+" : transaction.type === "expense" ? "-" : ""}
+                        ${Math.abs(transaction.amount).toFixed(2)}
+                      </p>
+                      <p className="text-xs text-gray-500">{transaction.accountId?.name}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Top Spending Categories */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Top Spending Categories</CardTitle>
+            <p className="text-sm text-gray-500 mt-1">This month</p>
+          </CardHeader>
+          <CardContent>
+            {topCategories.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-gray-500">No spending data for this month</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {topCategories.map((category: any, index: number) => {
+                  const total = topCategories.reduce((sum: number, c: any) => sum + Math.abs(c.total), 0);
+                  const percentage = (Math.abs(category.total) / total) * 100;
+                  return (
+                    <div key={category._id || index}>
+                      <div className="flex justify-between mb-1">
+                        <span className="text-sm font-medium">{category._id || "Other"}</span>
+                        <span className="text-sm font-bold">${Math.abs(category.total).toFixed(2)}</span>
+                      </div>
+                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                        <div
+                          className="bg-blue-500 h-2 rounded-full transition-all"
+                          style={{ width: `${percentage}%` }}
+                        />
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">{category.count} transactions</p>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Goals Overview */}
       {goals.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>Your Goals</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle>Your Goals</CardTitle>
+              <Link href="/goals">
+                <Button variant="ghost" size="sm">View All</Button>
+              </Link>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
@@ -215,9 +423,9 @@ export default function DashboardPage() {
                       ${goal.currentAmount.toFixed(2)} / ${goal.targetAmount.toFixed(2)}
                     </span>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                     <div
-                      className="bg-blue-500 h-2 rounded-full"
+                      className="bg-blue-500 h-2 rounded-full transition-all"
                       style={{ width: `${Math.min(goal.progress, 100)}%` }}
                     />
                   </div>

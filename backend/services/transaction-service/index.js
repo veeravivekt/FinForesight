@@ -7,6 +7,7 @@ import path from "path";
 import transactionRoutes from "./routes/transaction.js";
 import recurringRoutes from "./routes/recurring.js";
 import receiptRoutes from "./routes/receipt.js";
+import reportsRoutes from "./routes/reports.js";
 import { authenticate } from "../../shared/middleware/auth.js";
 import { connectDB } from "../../shared/utils/database.js";
 import { createServiceLogger } from "../../shared/utils/logger.js";
@@ -34,6 +35,7 @@ app.use("/uploads/receipts", express.static(path.join(process.cwd(), "uploads", 
 app.use("/transactions", authenticate, transactionRoutes);
 app.use("/recurring", authenticate, recurringRoutes);
 app.use("/receipts", authenticate, receiptRoutes);
+app.use("/reports", authenticate, reportsRoutes);
 
 // Health check
 app.get("/health", (req, res) => {

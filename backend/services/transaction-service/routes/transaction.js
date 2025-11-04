@@ -259,5 +259,59 @@ router.get("/stats/summary", transactionLimiter, async (req, res) => {
   }
 });
 
+// Export transactions as CSV
+router.get("/export/csv", transactionLimiter, async (req, res) => {
+  try {
+    const startDate = req.query.startDate ? new Date(req.query.startDate) : null;
+    const endDate = req.query.endDate ? new Date(req.query.endDate) : null;
+    const category = req.query.category;
+    const type = req.query.type;
+
+    // Build query
+    const query = { userId: req.userId };
+    if (category) query.category = category;
+    if (type) query.type = type;
+    if (startDate || endDate) {
+      query.date = {};
+      if (startDate) query.date.$gte = startDate;
+      if (endDate) query.date.$lte = endDate;
+    }
+
+    const transactions = await Transaction.find(query)
+      .sort({ date: -1 })
+      .populate("accountId", "name type")
+      .populate("toAccountId", "name");
+
+    // Build CSV
+    const headers = ["Date", "Type", "Description", "Category", "Amount", "Account", "To Account"];
+    const rows = transactions.map((t) => {
+      const date = new Date(t.date).toLocaleDateString();
+      const accountName = t.accountId?.name || "N/A";
+      const toAccountName = t.toAccountId?.name || "";
+      return [
+        date,
+        t.type,
+        t.description || "",
+        t.category || "",
+        t.amount.toFixed(2),
+        accountName,
+        toAccountName,
+      ];
+    });
+
+    const csvContent = [
+      headers.join(","),
+      ...rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")),
+    ].join("\n");
+
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", `attachment; filename="transactions-${Date.now()}.csv"`);
+    res.send(csvContent);
+  } catch (error) {
+    logger.error("Export CSV error:", error);
+    sendInternalError(res);
+  }
+});
+
 export default router;
 

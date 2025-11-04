@@ -10,7 +10,7 @@ import logger, { createServiceLogger } from "../../shared/utils/logger.js";
 dotenv.config();
 
 const app = express();
-const PORT = process.env.AUTH_SERVICE_PORT || 3001;
+const PORT = process.env.AUTH_SERVICE_PORT || 3008;
 const serviceLogger = createServiceLogger("auth-service");
 
 // Middleware

@@ -178,5 +178,131 @@ router.get("/me", authenticate, async (req, res) => {
   }
 });
 
+// Update user profile
+router.put("/profile", authenticate, async (req, res) => {
+  try {
+    const { name, email } = req.body;
+
+    if (!name && !email) {
+      return sendValidationError(res, "At least one field (name or email) is required");
+    }
+
+    const user = await User.findById(req.userId);
+    if (!user) {
+      return sendNotFoundError(res, "User");
+    }
+
+    // If email is being updated, check if it's already taken
+    if (email && email !== user.email) {
+      if (!validateEmail(email)) {
+        return sendValidationError(res, "Invalid email format");
+      }
+
+      const existingUser = await User.findOne({ email: sanitizeInput(email.toLowerCase()) });
+      if (existingUser) {
+        return sendError(res, 400, "Email already in use", "EMAIL_EXISTS");
+      }
+
+      user.email = sanitizeInput(email.toLowerCase());
+    }
+
+    if (name) {
+      user.name = sanitizeInput(name);
+    }
+
+    await user.save();
+
+    res.json({
+      message: "Profile updated successfully",
+      user: {
+        id: user._id.toString(),
+        _id: user._id.toString(),
+        name: user.name,
+        email: user.email,
+      },
+    });
+  } catch (error) {
+    logger.error("Update profile error:", error);
+    sendInternalError(res);
+  }
+});
+
+// Update user preferences
+router.put("/preferences", authenticate, async (req, res) => {
+  try {
+    const { currency, timezone, notifications } = req.body;
+
+    const user = await User.findById(req.userId);
+    if (!user) {
+      return sendNotFoundError(res, "User");
+    }
+
+    if (currency) {
+      user.preferences.currency = currency;
+    }
+
+    if (timezone) {
+      user.preferences.timezone = timezone;
+    }
+
+    if (notifications) {
+      if (typeof notifications.email === "boolean") {
+        user.preferences.notifications.email = notifications.email;
+      }
+      if (typeof notifications.push === "boolean") {
+        user.preferences.notifications.push = notifications.push;
+      }
+      if (typeof notifications.fraudAlerts === "boolean") {
+        user.preferences.notifications.fraudAlerts = notifications.fraudAlerts;
+      }
+    }
+
+    await user.save();
+
+    res.json({
+      message: "Preferences updated successfully",
+      preferences: user.preferences,
+    });
+  } catch (error) {
+    logger.error("Update preferences error:", error);
+    sendInternalError(res);
+  }
+});
+
+// Change password
+router.put("/password", authenticate, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return sendValidationError(res, "Current password and new password are required");
+    }
+
+    if (!validatePassword(newPassword)) {
+      return sendValidationError(res, "New password must be at least 6 characters");
+    }
+
+    const user = await User.findById(req.userId);
+    if (!user) {
+      return sendNotFoundError(res, "User");
+    }
+
+    // Verify current password
+    const isPasswordValid = await user.comparePassword(currentPassword);
+    if (!isPasswordValid) {
+      return sendUnauthorizedError(res, "Current password is incorrect");
+    }
+
+    // Update password (will be hashed by pre-save hook)
+    user.password = newPassword;
+    await user.save();
+
+    res.json({ message: "Password updated successfully" });
+  } catch (error) {
+    logger.error("Change password error:", error);
+    sendInternalError(res);
+  }
+});
+
 export default router;
 

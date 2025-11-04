@@ -242,10 +242,10 @@ app.get("/health", (req, res) => {
 // Start server
 const startServer = async () => {
   try {
-    await connectDB();
-    app.listen(PORT, () => {
+  await connectDB();
+  app.listen(PORT, () => {
       serviceLogger.info(`ML Service running on port ${PORT}`);
-    });
+  });
   } catch (error) {
     serviceLogger.error("Failed to start ML Service:", error);
     process.exit(1);

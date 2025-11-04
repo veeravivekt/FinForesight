@@ -16,9 +16,23 @@ const logFormat = printf(({ level, message, timestamp, stack, ...meta }) => {
     log += `\n${stack}`;
   }
   
-  // Add metadata if present
+  // Add metadata if present (avoid circular references)
   if (Object.keys(meta).length > 0 && meta.constructor === Object) {
-    log += `\n${JSON.stringify(meta, null, 2)}`;
+    try {
+      const seen = new WeakSet();
+      const cleaned = JSON.stringify(meta, (key, value) => {
+        if (typeof value === 'object' && value !== null) {
+          if (seen.has(value)) {
+            return '[Circular]';
+          }
+          seen.add(value);
+        }
+        return value;
+      });
+      log += `\n${cleaned}`;
+    } catch (e) {
+      log += `\n[Metadata serialization error: ${e.message}]`;
+    }
   }
   
   return log;

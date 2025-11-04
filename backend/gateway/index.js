@@ -16,7 +16,7 @@ const PORT = process.env.GATEWAY_PORT || 3000;
 const serviceLogger = createServiceLogger("api-gateway");
 
 // Service URLs
-const AUTH_SERVICE = process.env.AUTH_SERVICE_URL || "http://localhost:3001";
+const AUTH_SERVICE = process.env.AUTH_SERVICE_URL || "http://localhost:3008";
 const TRANSACTION_SERVICE = process.env.TRANSACTION_SERVICE_URL || "http://localhost:3002";
 const ML_SERVICE = process.env.ML_SERVICE_URL || "http://localhost:3003";
 const NOTIFICATION_SERVICE = process.env.NOTIFICATION_SERVICE_URL || "http://localhost:3004";
@@ -46,12 +46,13 @@ const proxyRequest = async (serviceUrl, req, res, servicePathPrefix = "") => {
     // We need to prepend the service-specific prefix
     const targetPath = servicePathPrefix + req.path;
     
-    serviceLogger.debug(`Proxying ${req.method} ${req.originalUrl} -> ${serviceUrl}${targetPath}`);
+    serviceLogger.info(`Proxying ${req.method} ${req.originalUrl} -> ${serviceUrl}${targetPath}`);
     
     const response = await axios({
       method: req.method,
       url: `${serviceUrl}${targetPath}`,
       data: req.body,
+      params: req.query,
       headers: {
         ...req.headers,
         host: undefined,
@@ -60,10 +61,10 @@ const proxyRequest = async (serviceUrl, req, res, servicePathPrefix = "") => {
       validateStatus: () => true,
     });
 
-    res.status(response.status).json(response.data);
+    return res.status(response.status).json(response.data);
   } catch (error) {
     serviceLogger.error("Proxy error:", error);
-    sendInternalError(res);
+    return sendInternalError(res);
   }
 };
 
@@ -100,8 +101,19 @@ const proxyStaticFile = async (serviceUrl, req, res, servicePathPrefix = "") => 
 };
 
 // Auth routes (no authentication required)
-app.use("/api/auth", (req, res) => {
-  proxyRequest(AUTH_SERVICE, req, res, "/auth");
+app.use("/api/auth", async (req, res, next) => {
+  try {
+    await proxyRequest(AUTH_SERVICE, req, res, "/auth");
+  } catch (error) {
+    serviceLogger.error("Auth route error:", error);
+    next(error);
+  }
+});
+
+// CSV export route (authentication required, returns CSV file)
+// Must be before /api/transactions to match first
+app.get("/api/transactions/export/csv", authenticate, (req, res) => {
+  proxyStaticFile(TRANSACTION_SERVICE, req, res, "/transactions/export");
 });
 
 // Transaction routes (authentication required)
@@ -117,6 +129,11 @@ app.use("/api/recurring", authenticate, (req, res) => {
 // Receipt routes (authentication required)
 app.use("/api/receipts", authenticate, (req, res) => {
   proxyRequest(TRANSACTION_SERVICE, req, res, "/receipts");
+});
+
+// Reports routes (authentication required)
+app.use("/api/reports", authenticate, (req, res) => {
+  proxyRequest(TRANSACTION_SERVICE, req, res, "/reports");
 });
 
 // Static file routes for receipts (authentication required)
@@ -147,6 +164,12 @@ app.use("/api/goals", authenticate, (req, res) => {
 // Health check
 app.get("/health", (req, res) => {
   res.json({ status: "ok", service: "api-gateway" });
+});
+
+// 404 handler for unmatched routes
+app.use((req, res) => {
+  serviceLogger.warn(`Route not found: ${req.method} ${req.originalUrl}`);
+  res.status(404).json({ error: "Route not found", path: req.originalUrl });
 });
 
 // Start server

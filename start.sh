@@ -51,7 +51,7 @@ echo $! > "$PROJECT_ROOT/logs/ml-python.pid"
 sleep 2
 
 # Start Node.js services
-start_service "auth-service" "3001" "services/auth-service/index.js"
+start_service "auth-service" "3008" "services/auth-service/index.js"
 sleep 2
 
 start_service "transaction-service" "3002" "services/transaction-service/index.js"
@@ -90,7 +90,7 @@ echo -e "Frontend: ${YELLOW}http://localhost:3001${NC}"
 echo -e "API Gateway: ${YELLOW}http://localhost:3000${NC}"
 echo -e ""
 echo -e "Service Status:"
-echo -e "  - Auth Service: ${GREEN}http://localhost:3001${NC}"
+echo -e "  - Auth Service: ${GREEN}http://localhost:3008${NC}"
 echo -e "  - Transaction Service: ${GREEN}http://localhost:3002${NC}"
 echo -e "  - ML Service: ${GREEN}http://localhost:3003${NC}"
 echo -e "  - Notification Service: ${GREEN}http://localhost:3004${NC}"
