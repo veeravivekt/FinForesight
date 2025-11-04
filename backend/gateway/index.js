@@ -74,6 +74,11 @@ app.use("/api/transactions", authenticate, (req, res) => {
   proxyRequest(TRANSACTION_SERVICE, req, res, "/transactions");
 });
 
+// Recurring transactions routes (authentication required)
+app.use("/api/recurring", authenticate, (req, res) => {
+  proxyRequest(TRANSACTION_SERVICE, req, res, "/recurring");
+});
+
 // ML routes (authentication required)
 app.use("/api/ml", authenticate, (req, res) => {
   proxyRequest(ML_SERVICE, req, res, "");

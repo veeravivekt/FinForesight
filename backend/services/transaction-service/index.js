@@ -5,6 +5,7 @@ import dotenv from "dotenv";
 import helmet from "helmet";
 import morgan from "morgan";
 import transactionRoutes from "./routes/transaction.js";
+import recurringRoutes from "./routes/recurring.js";
 import { authenticate } from "../../shared/middleware/auth.js";
 
 dotenv.config();
@@ -24,6 +25,7 @@ app.use(cors({
 
 // Routes
 app.use("/transactions", authenticate, transactionRoutes);
+app.use("/recurring", authenticate, recurringRoutes);
 
 // Health check
 app.get("/health", (req, res) => {

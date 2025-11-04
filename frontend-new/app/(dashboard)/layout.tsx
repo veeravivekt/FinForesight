@@ -5,7 +5,7 @@ import { useAuthStore } from "@/store/auth-store";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Wallet, LogOut, LayoutDashboard, CreditCard, Target, TrendingUp, Settings, FileText } from "lucide-react";
+import { Wallet, LogOut, LayoutDashboard, CreditCard, Target, TrendingUp, Settings, FileText, Repeat } from "lucide-react";
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -13,6 +13,7 @@ const navigation = [
   { name: "Transactions", href: "/transactions", icon: CreditCard },
   { name: "Budgets", href: "/budgets", icon: TrendingUp },
   { name: "Goals", href: "/goals", icon: Target },
+  { name: "Bills", href: "/bills", icon: Repeat },
   { name: "Reports", href: "/reports", icon: FileText },
   { name: "Settings", href: "/settings", icon: Settings },
 ];
