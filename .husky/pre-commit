@@ -1,0 +1,10 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# Run linters
+echo "Running linters..."
+
+cd backend && npm run lint:fix && cd ..
+cd frontend && npm run lint:fix && cd ..
+
+echo "Linting complete!"

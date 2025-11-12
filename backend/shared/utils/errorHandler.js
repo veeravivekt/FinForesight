@@ -3,6 +3,7 @@
  */
 
 import logger from "./logger.js";
+import { ErrorCodes } from "./errorCodes.js";
 
 /**
  * Send a standardized error response
@@ -25,6 +26,12 @@ export const sendError = (res, statusCode, message, code = null, details = null)
     errorResponse.details = details;
   }
 
+  // Include request ID if available
+  const requestId = res.getHeader("X-Request-ID");
+  if (requestId) {
+    errorResponse.requestId = requestId;
+  }
+
   return res.status(statusCode).json(errorResponse);
 };
 
@@ -39,7 +46,7 @@ export const sendValidationError = (res, errors) => {
     ? errors.join(", ") 
     : errors;
   
-  return sendError(res, 400, message, "VALIDATION_ERROR");
+  return sendError(res, 400, message, ErrorCodes.VALIDATION_ERROR);
 };
 
 /**
@@ -48,7 +55,7 @@ export const sendValidationError = (res, errors) => {
  * @param {string} resource - Resource name (e.g., "Account", "Transaction")
  */
 export const sendNotFoundError = (res, resource = "Resource") => {
-  return sendError(res, 404, `${resource} not found`, "NOT_FOUND");
+  return sendError(res, 404, `${resource} not found`, ErrorCodes.NOT_FOUND);
 };
 
 /**
@@ -57,7 +64,7 @@ export const sendNotFoundError = (res, resource = "Resource") => {
  * @param {string} message - Error message
  */
 export const sendUnauthorizedError = (res, message = "Unauthorized") => {
-  return sendError(res, 401, message, "UNAUTHORIZED");
+  return sendError(res, 401, message, ErrorCodes.UNAUTHORIZED);
 };
 
 /**
@@ -66,7 +73,7 @@ export const sendUnauthorizedError = (res, message = "Unauthorized") => {
  * @param {string} message - Error message
  */
 export const sendForbiddenError = (res, message = "Forbidden") => {
-  return sendError(res, 403, message, "FORBIDDEN");
+  return sendError(res, 403, message, ErrorCodes.FORBIDDEN);
 };
 
 /**
@@ -81,7 +88,7 @@ export const sendInternalError = (res, message = "Internal server error") => {
     : "An unexpected error occurred. Please try again later.";
   
   logger.error("Internal error:", message);
-  return sendError(res, 500, errorMessage, "INTERNAL_ERROR");
+  return sendError(res, 500, errorMessage, ErrorCodes.INTERNAL_ERROR);
 };
 
 /**

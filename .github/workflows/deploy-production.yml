@@ -1,0 +1,54 @@
+name: Deploy to Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to deploy"
+        required: true
+        type: string
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  deploy:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+
+      - name: Run tests
+        run: |
+          cd backend && npm ci && npm test
+          cd ../frontend && npm ci && npm test
+
+      - name: Build backend
+        working-directory: ./backend
+        run: |
+          npm ci
+          # Add build steps if needed
+
+      - name: Build frontend
+        working-directory: ./frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Deploy
+        run: |
+          echo "Deploy to production environment"
+          # Add deployment steps based on your infrastructure
+          # Examples:
+          # - docker build and push
+          # - kubectl apply
+          # - serverless deploy
+          # - rsync to server
+

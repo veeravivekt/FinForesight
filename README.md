@@ -23,8 +23,60 @@ A modern financial management application built with Next.js, Express, and micro
 
 The application follows a microservices architecture with the following services:
 
-1. **Auth Service** (Port 3001) - User authentication and session management
-2. **Transaction Service** (Port 3002) - Transaction CRUD operations
+```
+┌─────────────┐
+│   Frontend  │ (Next.js, Port 3001)
+│  (Next.js)  │
+└──────┬──────┘
+       │ HTTP/WebSocket
+       │
+┌──────▼──────────────────────────────────────────┐
+│           API Gateway (Port 3000)               │
+│  Routes requests to appropriate microservices   │
+└───┬───┬───┬───┬───┬───┬───┬───┬────────────────┘
+    │   │   │   │   │   │   │   │
+    │   │   │   │   │   │   │   └──► Notification Service (Port 3004)
+    │   │   │   │   │   │   │        - WebSocket server
+    │   │   │   │   │   │   │        - Real-time notifications
+    │   │   │   │   │   │   │
+    │   │   │   │   │   │   └──► ML Service (Port 3003)
+    │   │   │   │   │   │         - Smart categorization
+    │   │   │   │   │   │         - Fraud detection
+    │   │   │   │   │   │         └─► Python ML Service (Port 5000)
+    │   │   │   │   │   │
+    │   │   │   │   │   └──► Goal Service (Port 3007)
+    │   │   │   │   │         - Financial goals management
+    │   │   │   │   │
+    │   │   │   │   └──► Budget Service (Port 3006)
+    │   │   │   │         - Budget tracking
+    │   │   │   │         - Spending alerts
+    │   │   │   │
+    │   │   │   └──► Account Service (Port 3005)
+    │   │   │         - Multi-account management
+    │   │   │
+    │   │   └──► Transaction Service (Port 3002)
+    │   │         - Transaction CRUD
+    │   │         - Reports & exports
+    │   │         - Recurring transactions
+    │   │
+    │   └──► Auth Service (Port 3008)
+    │         - User authentication
+    │         - JWT token management
+    │         - Session management
+    │
+    └──► Shared Infrastructure
+          ├── MongoDB (Port 27017)
+          │    └── Data persistence
+          │
+          └── Redis (Port 6379)
+               ├── Session storage
+               └── Caching layer
+```
+
+**Service Details:**
+
+1. **Auth Service** (Port 3008) - User authentication and session management
+2. **Transaction Service** (Port 3002) - Transaction CRUD operations, reports, exports
 3. **Account Service** (Port 3005) - Multi-account management
 4. **Budget Service** (Port 3006) - Budget tracking and alerts
 5. **Goal Service** (Port 3007) - Financial goals management
@@ -34,8 +86,8 @@ The application follows a microservices architecture with the following services
 
 ### Infrastructure
 
-- **MongoDB** - Primary database for data persistence
-- **Redis** - Session storage and caching layer
+- **MongoDB** (Port 27017) - Primary database for data persistence
+- **Redis** (Port 6379) - Session storage and caching layer
 - **Python ML Service** (Port 5000) - Machine learning model inference
 
 ## Tech Stack
@@ -82,14 +134,13 @@ cd backend
 npm install
 ```
 
-3. Create a `.env` file in the backend directory with the following variables:
-```env
-MONGO_URL=mongodb://localhost:27017/finforesight
-REDIS_URL=redis://localhost:6379
-JWT_SECRET=your-super-secret-jwt-key-change-in-production
-JWT_REFRESH_SECRET=your-super-secret-refresh-key-change-in-production
-FRONTEND_URL=http://localhost:3001
+3. Create a `.env` file in the backend directory:
+```bash
+# Copy the example file
+cp .env.example .env
 ```
+
+   Then edit `.env` and update the values as needed. See `backend/.env.example` for all available configuration options and descriptions.
 
 4. Start MongoDB and Redis services:
 ```bash
@@ -140,9 +191,12 @@ npm install
 ```
 
 3. Create a `.env.local` file in the frontend directory:
-```env
-NEXT_PUBLIC_API_URL=http://localhost:3000/api
+```bash
+# Copy the example file
+cp .env.local.example .env.local
 ```
+
+   Then edit `.env.local` and update the values as needed. See `frontend/.env.local.example` for all available configuration options.
 
 4. Start the development server:
 ```bash
@@ -254,6 +308,56 @@ Contributions are welcome! Please follow these steps:
 ## License
 
 This project is licensed under the ISC License.
+
+## Troubleshooting
+
+### Common Issues
+
+#### Services won't start
+- **Check MongoDB**: Ensure MongoDB is running (`mongosh` should connect)
+- **Check Redis**: Ensure Redis is running (`redis-cli ping` should return "PONG")
+- **Check Ports**: Ensure ports 3000-3008 and 5000 are not in use
+- **Check Environment Variables**: Verify `.env` file exists and has correct values
+
+#### Database Connection Errors
+- Verify `MONGO_URL` is correct in `.env`
+- Check MongoDB is accessible: `mongosh "mongodb://localhost:27017/finforesight"`
+- Ensure MongoDB service is running: `brew services list` (macOS)
+
+#### Redis Connection Errors
+- Verify `REDIS_URL` is correct in `.env`
+- Check Redis is accessible: `redis-cli ping`
+- Ensure Redis service is running: `brew services list` (macOS)
+
+#### CORS Errors
+- Verify `FRONTEND_URL` in backend `.env` matches frontend URL
+- Check `NEXT_PUBLIC_API_URL` in frontend `.env.local` matches gateway URL
+- Ensure both frontend and backend are running
+
+#### Authentication Issues
+- Verify JWT secrets are set in `.env`
+- Check token expiration settings (`JWT_EXPIRES_IN`, `JWT_REFRESH_EXPIRES_IN`)
+- Clear browser localStorage and cookies
+
+#### Rate Limiting Issues
+- In development, set `DISABLE_RATE_LIMIT=true` in `.env`
+- Or set `NODE_ENV=development` to automatically bypass rate limiting
+- Clear rate limits: `npm run clear-rate-limits` (in backend directory)
+
+### Development Tips
+
+- Use the provided `start.sh` script to start all services at once
+- Use `stop.sh` to stop all services
+- Check service logs in the `logs/` directory
+- Use `npm run seed` to populate test data
+- Use `npm run create-test-user` to create a test user
+
+### Getting Help
+
+1. Check the logs in `backend/logs/` for error messages
+2. Verify all environment variables are set correctly
+3. Ensure all prerequisites are installed and running
+4. Check that all services are running on their expected ports
 
 ## Support
 

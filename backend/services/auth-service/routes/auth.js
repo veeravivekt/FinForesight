@@ -1,7 +1,7 @@
 import express from "express";
 import mongoose from "mongoose";
 import User from "../../../shared/models/User.js";
-import { generateTokens, verifyRefreshToken } from "../../../shared/utils/jwt.js";
+import { generateTokens, verifyRefreshToken, rotateRefreshToken } from "../../../shared/utils/jwt.js";
 import { setSession, getSession, deleteSession } from "../../../shared/utils/redis.js";
 import { validateEmail, validatePassword, sanitizeInput } from "../../../shared/utils/validation.js";
 import { createRateLimiter } from "../../../shared/middleware/rateLimiter.js";
@@ -17,6 +17,71 @@ const logger = createServiceLogger("auth-service");
 const registerLimiter = createRateLimiter(1000, 60); // 1000 attempts per minute (effectively disabled)
 const loginLimiter = createRateLimiter(1000, 60); // 1000 attempts per minute (effectively disabled)
 
+/**
+ * @swagger
+ * /auth/register:
+ *   post:
+ *     summary: Register a new user
+ *     tags: [Authentication]
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *               - email
+ *               - password
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 example: John Doe
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: john@example.com
+ *               password:
+ *                 type: string
+ *                 format: password
+ *                 minLength: 6
+ *                 example: password123
+ *     responses:
+ *       201:
+ *         description: User registered successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: User registered successfully
+ *                 user:
+ *                   $ref: '#/components/schemas/User'
+ *                 accessToken:
+ *                   type: string
+ *                   description: JWT access token
+ *                 refreshToken:
+ *                   type: string
+ *                   description: JWT refresh token
+ *       400:
+ *         description: Validation error or user already exists
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *             examples:
+ *               validation:
+ *                 value:
+ *                   error: "Name, email, and password are required"
+ *                   code: "VALIDATION_ERROR"
+ *               userExists:
+ *                 value:
+ *                   error: "User already exists"
+ *                   code: "USER_EXISTS"
+ */
 // Register
 router.post("/register", registerLimiter, async (req, res) => {
   try {
@@ -31,8 +96,9 @@ router.post("/register", registerLimiter, async (req, res) => {
       return sendValidationError(res, "Invalid email format");
     }
 
-    if (!validatePassword(password)) {
-      return sendValidationError(res, "Password must be at least 6 characters");
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.isValid) {
+      return sendValidationError(res, passwordValidation.errors);
     }
 
     // Check if user exists
@@ -51,10 +117,10 @@ router.post("/register", registerLimiter, async (req, res) => {
     await user.save();
 
     // Generate tokens
-    const { accessToken, refreshToken } = generateTokens(user._id.toString());
+    const { accessToken, refreshToken, tokenFamilyId } = generateTokens(user._id.toString());
 
-    // Store refresh token in Redis
-    await setSession(user._id.toString(), refreshToken);
+    // Store refresh token in Redis with token family ID
+    await setSession(`${user._id.toString()}:${tokenFamilyId}`, refreshToken);
 
     res.status(201).json({
       message: "User registered successfully",
@@ -73,6 +139,63 @@ router.post("/register", registerLimiter, async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /auth/login:
+ *   post:
+ *     summary: Authenticate user and get tokens
+ *     tags: [Authentication]
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - password
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: john@example.com
+ *               password:
+ *                 type: string
+ *                 format: password
+ *                 example: password123
+ *     responses:
+ *       200:
+ *         description: Login successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Login successful
+ *                 user:
+ *                   $ref: '#/components/schemas/User'
+ *                 accessToken:
+ *                   type: string
+ *                   description: JWT access token
+ *                 refreshToken:
+ *                   type: string
+ *                   description: JWT refresh token
+ *       400:
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Invalid credentials
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 // Login
 router.post("/login", loginLimiter, async (req, res) => {
   try {
@@ -88,17 +211,53 @@ router.post("/login", loginLimiter, async (req, res) => {
       return sendUnauthorizedError(res, "Invalid credentials");
     }
 
+    // Check if account is locked
+    if (user.accountLockedUntil && user.accountLockedUntil > new Date()) {
+      const minutesRemaining = Math.ceil((user.accountLockedUntil - new Date()) / 60000);
+      return sendError(
+        res,
+        423,
+        `Account is locked. Please try again in ${minutesRemaining} minute(s).`,
+        "ACCOUNT_LOCKED"
+      );
+    }
+
     // Check password
     const isPasswordValid = await user.comparePassword(password);
+    
+    // Update last login attempt
+    user.lastLoginAttempt = new Date();
+
     if (!isPasswordValid) {
+      // Increment failed login attempts
+      user.failedLoginAttempts = (user.failedLoginAttempts || 0) + 1;
+
+      // Lock account after 5 failed attempts for 30 minutes
+      if (user.failedLoginAttempts >= 5) {
+        user.accountLockedUntil = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes
+        await user.save();
+        return sendError(
+          res,
+          423,
+          "Account locked due to too many failed login attempts. Please try again in 30 minutes.",
+          "ACCOUNT_LOCKED"
+        );
+      }
+
+      await user.save();
       return sendUnauthorizedError(res, "Invalid credentials");
     }
 
-    // Generate tokens
-    const { accessToken, refreshToken } = generateTokens(user._id.toString());
+    // Reset failed login attempts on successful login
+    user.failedLoginAttempts = 0;
+    user.accountLockedUntil = null;
+    await user.save();
 
-    // Store refresh token in Redis
-    await setSession(user._id.toString(), refreshToken);
+    // Generate tokens
+    const { accessToken, refreshToken, tokenFamilyId } = generateTokens(user._id.toString());
+
+    // Store refresh token in Redis with token family ID
+    await setSession(`${user._id.toString()}:${tokenFamilyId}`, refreshToken);
 
     res.json({
       message: "Login successful",
@@ -117,6 +276,42 @@ router.post("/login", loginLimiter, async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /auth/refresh:
+ *   post:
+ *     summary: Refresh access token
+ *     tags: [Authentication]
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - refreshToken
+ *             properties:
+ *               refreshToken:
+ *                 type: string
+ *                 description: JWT refresh token
+ *     responses:
+ *       200:
+ *         description: Tokens refreshed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 accessToken:
+ *                   type: string
+ *                 refreshToken:
+ *                   type: string
+ *       400:
+ *         description: Validation error
+ *       401:
+ *         description: Invalid refresh token
+ */
 // Refresh token
 router.post("/refresh", async (req, res) => {
   try {
@@ -128,21 +323,23 @@ router.post("/refresh", async (req, res) => {
 
     // Verify refresh token
     const decoded = verifyRefreshToken(refreshToken);
-    if (!decoded) {
+    if (!decoded || !decoded.tokenFamilyId) {
       return sendUnauthorizedError(res, "Invalid refresh token");
     }
 
-    // Check if session exists in Redis
-    const storedToken = await getSession(decoded.userId);
+    // Check if token family exists in Redis (for rotation)
+    const tokenFamilyKey = `${decoded.userId}:${decoded.tokenFamilyId}`;
+    const storedToken = await getSession(tokenFamilyKey);
     if (storedToken !== refreshToken) {
-      return sendUnauthorizedError(res, "Invalid refresh token");
+      return sendUnauthorizedError(res, "Invalid or expired refresh token");
     }
 
-    // Generate new tokens
-    const { accessToken, refreshToken: newRefreshToken } = generateTokens(decoded.userId);
+    // Rotate refresh token (invalidate old, generate new)
+    const { accessToken, refreshToken: newRefreshToken, tokenFamilyId: newFamilyId } =
+      await rotateRefreshToken(decoded.userId, decoded.tokenFamilyId);
 
-    // Update session in Redis
-    await setSession(decoded.userId, newRefreshToken);
+    // Store new refresh token in Redis
+    await setSession(`${decoded.userId}:${newFamilyId}`, newRefreshToken);
 
     res.json({
       accessToken,
@@ -165,6 +362,29 @@ router.post("/logout", authenticate, async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /auth/me:
+ *   get:
+ *     summary: Get current authenticated user
+ *     tags: [Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: User information
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 user:
+ *                   $ref: '#/components/schemas/User'
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: User not found
+ */
 // Get current user
 router.get("/me", authenticate, async (req, res) => {
   try {

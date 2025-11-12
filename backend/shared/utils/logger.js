@@ -8,8 +8,13 @@ import winston from "winston";
 const { combine, timestamp, printf, colorize, errors } = winston.format;
 
 // Define log format
-const logFormat = printf(({ level, message, timestamp, stack, ...meta }) => {
+const logFormat = printf(({ level, message, timestamp, stack, requestId, ...meta }) => {
   let log = `${timestamp} [${level}]: ${message}`;
+  
+  // Add request ID if present
+  if (requestId) {
+    log = `${timestamp} [${level}] [${requestId}]: ${message}`;
+  }
   
   // Add stack trace for errors
   if (stack) {
