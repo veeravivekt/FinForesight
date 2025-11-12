@@ -720,7 +720,7 @@ router.get("/export/excel", transactionLimiter, async (req, res) => {
       return sendInternalError(res, "User authentication failed");
     }
 
-    const XLSX = (await import("xlsx")).default;
+    const ExcelJS = (await import("exceljs")).default;
     const userId = typeof req.userId === 'string' 
       ? new mongoose.Types.ObjectId(req.userId) 
       : req.userId;
@@ -746,46 +746,49 @@ router.get("/export/excel", transactionLimiter, async (req, res) => {
       .populate("toAccountId", "name")
       .limit(10000); // Limit to prevent memory issues
 
-    // Prepare data for Excel
-    const worksheetData = [
-      ["Date", "Type", "Description", "Category", "Amount", "Account", "To Account"],
-      ...transactions.map((t) => [
-        new Date(t.date).toLocaleDateString(),
-        t.type,
-        t.description || "",
-        t.category || "",
-        t.amount.toFixed(2),
-        t.accountId?.name || "N/A",
-        t.toAccountId?.name || "",
-      ]),
-    ];
-
     // Create workbook and worksheet
-    const workbook = XLSX.utils.book_new();
-    const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("Transactions");
 
-    // Set column widths
-    worksheet["!cols"] = [
-      { wch: 12 }, // Date
-      { wch: 10 }, // Type
-      { wch: 30 }, // Description
-      { wch: 15 }, // Category
-      { wch: 12 }, // Amount
-      { wch: 20 }, // Account
-      { wch: 20 }, // To Account
+    // Set column headers
+    worksheet.columns = [
+      { header: "Date", key: "date", width: 12 },
+      { header: "Type", key: "type", width: 10 },
+      { header: "Description", key: "description", width: 30 },
+      { header: "Category", key: "category", width: 15 },
+      { header: "Amount", key: "amount", width: 12 },
+      { header: "Account", key: "account", width: 20 },
+      { header: "To Account", key: "toAccount", width: 20 },
     ];
 
-    // Add worksheet to workbook
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Transactions");
+    // Style the header row
+    worksheet.getRow(1).font = { bold: true };
+    worksheet.getRow(1).fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFE0E0E0" },
+    };
 
-    // Generate Excel file buffer
-    const excelBuffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+    // Add data rows
+    transactions.forEach((t) => {
+      worksheet.addRow({
+        date: new Date(t.date).toLocaleDateString(),
+        type: t.type,
+        description: t.description || "",
+        category: t.category || "",
+        amount: parseFloat(t.amount.toFixed(2)),
+        account: t.accountId?.name || "N/A",
+        toAccount: t.toAccountId?.name || "",
+      });
+    });
 
     // Set response headers
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.setHeader("Content-Disposition", `attachment; filename="transactions-${Date.now()}.xlsx"`);
 
-    res.send(excelBuffer);
+    // Write to response
+    await workbook.xlsx.write(res);
+    res.end();
   } catch (error) {
     logger.error("Export Excel error:", error);
     logger.error("Error details:", error.message);
