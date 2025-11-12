@@ -28,10 +28,7 @@ export const connectDB = async (mongoUrl = null) => {
   }
 
   try {
-    await mongoose.connect(url, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
+    await mongoose.connect(url);
 
     isConnected = true;
     logger.info("MongoDB connected successfully");

@@ -5,6 +5,7 @@ import Transaction from "../shared/models/Transaction.js";
 import Budget from "../shared/models/Budget.js";
 import Goal from "../shared/models/Goal.js";
 import RecurringTransaction from "../shared/models/RecurringTransaction.js";
+import Receipt from "../shared/models/Receipt.js";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -67,6 +68,7 @@ const seedTestData = async () => {
 
     // Clear existing data for test user (optional - comment out if you want to keep existing data)
     console.log("Clearing existing test data...");
+    await Receipt.deleteMany({ userId });
     await Transaction.deleteMany({ userId });
     await Budget.deleteMany({ userId });
     await Goal.deleteMany({ userId });
@@ -79,10 +81,11 @@ const seedTestData = async () => {
     const accounts = [];
     
     const accountData = [
-      { name: "Main Checking", type: "checking", balance: 5000, institution: "Chase Bank", color: "#3b82f6" },
-      { name: "Savings Account", type: "savings", balance: 15000, institution: "Chase Bank", color: "#10b981" },
-      { name: "Credit Card", type: "credit_card", balance: -1200, institution: "American Express", color: "#f59e0b" },
-      { name: "Cash", type: "cash", balance: 250, institution: null, color: "#6b7280" },
+      { name: "Main Checking", type: "checking", balance: 0, institution: "Chase Bank", color: "#3b82f6", accountNumber: "****1234" },
+      { name: "Savings Account", type: "savings", balance: 0, institution: "Chase Bank", color: "#10b981", accountNumber: "****5678" },
+      { name: "Credit Card", type: "credit_card", balance: 0, institution: "American Express", color: "#f59e0b", accountNumber: "****9012" },
+      { name: "Cash", type: "cash", balance: 0, institution: null, color: "#6b7280" },
+      { name: "Investment Account", type: "investment", balance: 0, institution: "Fidelity", color: "#8b5cf6", accountNumber: "****3456" },
     ];
 
     for (const accData of accountData) {
@@ -99,6 +102,13 @@ const seedTestData = async () => {
     const savingsAccount = accounts[1];
     const creditCardAccount = accounts[2];
     const cashAccount = accounts[3];
+    const investmentAccount = accounts[4];
+
+    // Track account balances
+    const accountBalances = {};
+    accounts.forEach(acc => {
+      accountBalances[acc._id.toString()] = 0;
+    });
 
     // Create transactions (last 3 months)
     console.log("Creating transactions...");
@@ -106,57 +116,252 @@ const seedTestData = async () => {
     const threeMonthsAgo = addDays(now, -90);
     
     const transactionDescriptions = {
-      Food: ["Grocery Store", "Restaurant", "Coffee Shop", "Fast Food", "Dining Out", "Grocery Shopping", "Lunch", "Dinner"],
-      Transport: ["Uber Ride", "Gas Station", "Metro Card", "Parking", "Car Service", "Bus Ticket", "Train Ticket"],
-      Shopping: ["Amazon Purchase", "Clothing Store", "Electronics", "Online Shopping", "Department Store", "Pharmacy"],
-      Bills: ["Electric Bill", "Water Bill", "Internet Bill", "Phone Bill", "Rent", "Insurance", "Utility Bill"],
-      Entertainment: ["Movie Tickets", "Concert", "Streaming Service", "Video Games", "Books", "Netflix", "Spotify"],
-      Healthcare: ["Doctor Visit", "Pharmacy", "Dental", "Prescription", "Medical Supplies", "Health Insurance"],
-      Education: ["Course Fee", "Books", "Tuition", "Online Course", "Workshop"],
-      Travel: ["Hotel", "Flight", "Train Ticket", "Car Rental", "Vacation", "Travel Expenses"],
-      Other: ["Miscellaneous", "Transfer", "ATM Withdrawal", "Deposit", "Other Expense"],
+      Food: [
+        { desc: "Whole Foods Market", merchant: "Whole Foods" },
+        { desc: "Starbucks Coffee", merchant: "Starbucks" },
+        { desc: "McDonald's", merchant: "McDonald's" },
+        { desc: "Chipotle Mexican Grill", merchant: "Chipotle" },
+        { desc: "Trader Joe's", merchant: "Trader Joe's" },
+        { desc: "Local Restaurant", merchant: "Local Bistro" },
+        { desc: "Pizza Delivery", merchant: "Domino's Pizza" },
+        { desc: "Grocery Shopping", merchant: "Safeway" },
+      ],
+      Transport: [
+        { desc: "Uber Ride", merchant: "Uber" },
+        { desc: "Gas Station", merchant: "Shell" },
+        { desc: "Metro Card Refill", merchant: "Metro Transit" },
+        { desc: "Parking Fee", merchant: "Parking Co" },
+        { desc: "Lyft Ride", merchant: "Lyft" },
+        { desc: "Car Wash", merchant: "Car Wash Plus" },
+      ],
+      Shopping: [
+        { desc: "Amazon Purchase", merchant: "Amazon" },
+        { desc: "Target Shopping", merchant: "Target" },
+        { desc: "Best Buy Electronics", merchant: "Best Buy" },
+        { desc: "Clothing Store", merchant: "Nike" },
+        { desc: "Online Shopping", merchant: "eBay" },
+        { desc: "CVS Pharmacy", merchant: "CVS" },
+      ],
+      Bills: [
+        { desc: "Electric Bill", merchant: "Power Company" },
+        { desc: "Water Bill", merchant: "Water Utility" },
+        { desc: "Internet Bill", merchant: "Comcast" },
+        { desc: "Phone Bill", merchant: "Verizon" },
+        { desc: "Rent Payment", merchant: "Property Management" },
+        { desc: "Insurance Premium", merchant: "State Farm" },
+      ],
+      Entertainment: [
+        { desc: "Movie Tickets", merchant: "AMC Theaters" },
+        { desc: "Concert Tickets", merchant: "Ticketmaster" },
+        { desc: "Netflix Subscription", merchant: "Netflix" },
+        { desc: "Spotify Premium", merchant: "Spotify" },
+        { desc: "Video Game Purchase", merchant: "Steam" },
+        { desc: "Book Store", merchant: "Barnes & Noble" },
+      ],
+      Healthcare: [
+        { desc: "Doctor Visit", merchant: "Medical Center" },
+        { desc: "Pharmacy Prescription", merchant: "Walgreens" },
+        { desc: "Dental Checkup", merchant: "Dental Office" },
+        { desc: "Gym Membership", merchant: "24 Hour Fitness" },
+        { desc: "Health Insurance", merchant: "Blue Cross" },
+      ],
+      Education: [
+        { desc: "Online Course", merchant: "Coursera" },
+        { desc: "Textbooks", merchant: "Amazon" },
+        { desc: "Workshop Fee", merchant: "Learning Center" },
+      ],
+      Travel: [
+        { desc: "Hotel Booking", merchant: "Marriott" },
+        { desc: "Flight Ticket", merchant: "United Airlines" },
+        { desc: "Car Rental", merchant: "Hertz" },
+        { desc: "Airbnb Stay", merchant: "Airbnb" },
+      ],
+      Other: [
+        { desc: "Salary Deposit", merchant: "Employer" },
+        { desc: "Transfer to Savings", merchant: null },
+        { desc: "ATM Withdrawal", merchant: "ATM" },
+        { desc: "Bank Fee", merchant: "Bank" },
+      ],
     };
 
     let transactionCount = 0;
     const transactions = [];
+    const receiptsToCreate = [];
 
     // Generate transactions for each day in the last 3 months
     for (let i = 0; i < 90; i++) {
       const date = addDays(threeMonthsAgo, i);
+      const dayOfMonth = date.getDate();
+      const dayOfWeek = date.getDay();
       
-      // Skip some days (not every day has transactions)
-      if (Math.random() > 0.6) continue;
+      // Add salary on 1st of each month to checking account
+      if (dayOfMonth === 1) {
+        const salaryTransaction = new Transaction({
+          userId,
+          accountId: checkingAccount._id,
+          amount: 5000,
+          description: "Salary Deposit",
+          category: "Other",
+          type: "income",
+          date: new Date(date.getTime() + 9 * 3600000), // 9 AM
+          merchant: { name: "Employer", category: "Salary" },
+        });
+        await salaryTransaction.save();
+        transactions.push(salaryTransaction);
+        accountBalances[checkingAccount._id.toString()] += 5000;
+        transactionCount++;
+      }
 
-      // Determine number of transactions per day (0-3)
-      const transactionsPerDay = randomBetween(0, 3);
+      // Add monthly bills on specific days
+      if (dayOfMonth === 5) {
+        const electricBill = new Transaction({
+          userId,
+          accountId: checkingAccount._id,
+          amount: -120,
+          description: "Electric Bill",
+          category: "Bills",
+          type: "expense",
+          date: new Date(date.getTime() + 10 * 3600000),
+          merchant: { name: "Power Company", category: "Utilities" },
+        });
+        await electricBill.save();
+        transactions.push(electricBill);
+        accountBalances[checkingAccount._id.toString()] -= 120;
+        transactionCount++;
+      }
+
+      if (dayOfMonth === 10) {
+        const internetBill = new Transaction({
+          userId,
+          accountId: checkingAccount._id,
+          amount: -79.99,
+          description: "Internet Bill",
+          category: "Bills",
+          type: "expense",
+          date: new Date(date.getTime() + 10 * 3600000),
+          merchant: { name: "Comcast", category: "Utilities" },
+        });
+        await internetBill.save();
+        transactions.push(internetBill);
+        accountBalances[checkingAccount._id.toString()] -= 79.99;
+        transactionCount++;
+      }
+
+      if (dayOfMonth === 15) {
+        const netflixBill = new Transaction({
+          userId,
+          accountId: creditCardAccount._id,
+          amount: -15.99,
+          description: "Netflix Subscription",
+          category: "Entertainment",
+          type: "expense",
+          date: new Date(date.getTime() + 11 * 3600000),
+          merchant: { name: "Netflix", category: "Streaming" },
+          isRecurring: true,
+        });
+        await netflixBill.save();
+        transactions.push(netflixBill);
+        accountBalances[creditCardAccount._id.toString()] -= 15.99;
+        transactionCount++;
+      }
+
+      if (dayOfMonth === 20) {
+        const phoneBill = new Transaction({
+          userId,
+          accountId: creditCardAccount._id,
+          amount: -89.99,
+          description: "Phone Bill",
+          category: "Bills",
+          type: "expense",
+          date: new Date(date.getTime() + 10 * 3600000),
+          merchant: { name: "Verizon", category: "Telecommunications" },
+        });
+        await phoneBill.save();
+        transactions.push(phoneBill);
+        accountBalances[creditCardAccount._id.toString()] -= 89.99;
+        transactionCount++;
+      }
+
+      // Add transfer to savings on 2nd of each month
+      if (dayOfMonth === 2) {
+        const transferAmount = 1000;
+        const transferToSavings = new Transaction({
+          userId,
+          accountId: checkingAccount._id,
+          amount: -transferAmount,
+          description: "Transfer to Savings",
+          category: "Other",
+          type: "transfer",
+          date: new Date(date.getTime() + 12 * 3600000),
+          toAccountId: savingsAccount._id,
+        });
+        await transferToSavings.save();
+        transactions.push(transferToSavings);
+        accountBalances[checkingAccount._id.toString()] -= transferAmount;
+        
+        const transferToSavingsIncome = new Transaction({
+          userId,
+          accountId: savingsAccount._id,
+          amount: transferAmount,
+          description: "Transfer from Checking",
+          category: "Other",
+          type: "transfer",
+          date: new Date(date.getTime() + 12 * 3600000),
+          toAccountId: checkingAccount._id,
+        });
+        await transferToSavingsIncome.save();
+        transactions.push(transferToSavingsIncome);
+        accountBalances[savingsAccount._id.toString()] += transferAmount;
+        transactionCount += 2;
+      }
+
+      // Skip some days (not every day has transactions)
+      if (Math.random() > 0.5) continue;
+
+      // Determine number of transactions per day (0-4)
+      const transactionsPerDay = randomBetween(0, 4);
 
       for (let j = 0; j < transactionsPerDay; j++) {
         const category = randomElement(categories);
-        const type = Math.random() > 0.85 ? "income" : "expense"; // 15% income, 85% expense
-        const account = randomElement(accounts);
+        const type = Math.random() > 0.9 ? "income" : "expense"; // 10% income, 90% expense
+        
+        // Choose account based on transaction type
+        let account;
+        if (type === "income") {
+          account = Math.random() > 0.5 ? checkingAccount : savingsAccount;
+        } else {
+          // Credit card for online purchases, checking for others
+          if (category === "Shopping" || category === "Entertainment") {
+            account = Math.random() > 0.6 ? creditCardAccount : checkingAccount;
+          } else {
+            account = randomElement([checkingAccount, creditCardAccount, cashAccount]);
+          }
+        }
         
         let amount;
         if (type === "income") {
-          amount = randomFloat(500, 5000); // Income: $500-$5000
+          amount = randomFloat(100, 1000); // Small income transactions
         } else {
           // Expense amounts vary by category
           const categoryRanges = {
-            Food: [10, 150],
-            Transport: [5, 80],
-            Shopping: [20, 500],
-            Bills: [50, 500],
-            Entertainment: [15, 200],
-            Healthcare: [30, 400],
-            Education: [50, 1000],
-            Travel: [100, 2000],
-            Other: [5, 200],
+            Food: [8, 120],
+            Transport: [5, 75],
+            Shopping: [15, 400],
+            Bills: [40, 300],
+            Entertainment: [12, 150],
+            Healthcare: [25, 350],
+            Education: [40, 800],
+            Travel: [80, 1500],
+            Other: [5, 150],
           };
           const [min, max] = categoryRanges[category] || [10, 200];
           amount = randomFloat(min, max);
         }
 
-        const descriptions = transactionDescriptions[category] || ["Transaction"];
-        const description = randomElement(descriptions);
+        const descriptions = transactionDescriptions[category] || [{ desc: "Transaction", merchant: null }];
+        const descObj = randomElement(descriptions);
+        const description = descObj.desc;
+        const merchant = descObj.merchant ? { name: descObj.merchant, category } : undefined;
 
         const transaction = new Transaction({
           userId,
@@ -165,16 +370,72 @@ const seedTestData = async () => {
           description,
           category,
           type,
-          date: new Date(date.getTime() + j * 3600000), // Spread transactions throughout the day
+          date: new Date(date.getTime() + (9 + j * 3) * 3600000), // Spread transactions throughout the day
+          merchant,
         });
 
         await transaction.save();
         transactions.push(transaction);
+        accountBalances[account._id.toString()] += transaction.amount;
         transactionCount++;
+
+        // Add receipts for some transactions (30% chance, only for expenses)
+        if (type === "expense" && Math.random() < 0.3 && merchant) {
+          receiptsToCreate.push({
+            transactionId: transaction._id,
+            merchant: merchant.name,
+            amount: Math.abs(amount),
+            date: transaction.date,
+            category,
+          });
+        }
       }
     }
 
+    // Update account balances
+    console.log("Updating account balances...");
+    for (const account of accounts) {
+      const currentBalance = accountBalances[account._id.toString()];
+      // Set initial balances
+      if (account.type === "checking") {
+        account.balance = currentBalance + 5000; // Start with some base
+      } else if (account.type === "savings") {
+        account.balance = currentBalance + 15000; // Start with some base
+      } else if (account.type === "credit_card") {
+        account.balance = currentBalance - 1200; // Start with some debt
+      } else if (account.type === "cash") {
+        account.balance = currentBalance + 250; // Start with some cash
+      } else if (account.type === "investment") {
+        account.balance = currentBalance + 5000; // Start with some investments
+      }
+      await account.save();
+    }
+
+    // Create receipts
+    console.log("Creating receipts...");
+    let receiptCount = 0;
+    for (const receiptData of receiptsToCreate) {
+      const receipt = new Receipt({
+        userId,
+        transactionId: receiptData.transactionId,
+        imageUrl: `/uploads/receipts/sample-receipt-${receiptCount + 1}.jpg`,
+        merchant: receiptData.merchant,
+        amount: receiptData.amount,
+        date: receiptData.date,
+        category: receiptData.category,
+        isProcessed: true,
+        ocrData: {
+          merchant: receiptData.merchant,
+          total: receiptData.amount,
+          date: receiptData.date.toISOString(),
+        },
+      });
+      await receipt.save();
+      receiptCount++;
+    }
+
     console.log(`Created ${transactionCount} transactions`);
+    console.log(`Created ${receiptCount} receipts`);
 
     // Create budgets for current month
     console.log("Creating budgets...");
@@ -341,9 +602,16 @@ const seedTestData = async () => {
     console.log(`\nSummary:`);
     console.log(`- Accounts: ${accounts.length}`);
     console.log(`- Transactions: ${transactionCount}`);
+    console.log(`- Receipts: ${receiptCount}`);
     console.log(`- Budgets: ${budgetData.length}`);
     console.log(`- Goals: ${goalData.length}`);
     console.log(`- Recurring Transactions: ${recurringData.length}`);
+    console.log(`\nAccount Balances:`);
+    for (const account of accounts) {
+      const balance = account.balance.toFixed(2);
+      const sign = account.type === "credit_card" && account.balance < 0 ? "" : "$";
+      console.log(`  - ${account.name}: ${sign}${balance}`);
+    }
     console.log(`\nTest User Credentials:`);
     console.log(`Email: test@finforesight.com`);
     console.log(`Password: test123`);

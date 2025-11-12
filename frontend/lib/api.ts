@@ -38,8 +38,10 @@ class ApiClient {
             window.location.href = "/login";
           }
         }
-        const error = await response.json().catch(() => ({ error: "Unknown error" }));
-        throw new Error(error.error || `Request failed: ${response.status}`);
+        const error = await response.json().catch(() => ({ error: `Request failed: ${response.status}` }));
+        const errorMessage = error.error || error.message || `Request failed: ${response.status}`;
+        console.error(`API Error [${response.status}]:`, errorMessage, error);
+        throw new Error(errorMessage);
       }
 
       return response.json();

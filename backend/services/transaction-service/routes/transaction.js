@@ -1,6 +1,9 @@
 import express from "express";
 import mongoose from "mongoose";
 import Transaction from "../../../shared/models/Transaction.js";
+import Account from "../../../shared/models/Account.js";
+import Goal from "../../../shared/models/Goal.js";
+import Receipt from "../../../shared/models/Receipt.js";
 import { validateTransaction } from "../../../shared/utils/validation.js";
 import { createRateLimiter } from "../../../shared/middleware/rateLimiter.js";
 import { setCache, getCache } from "../../../shared/utils/redis.js";
@@ -16,6 +19,18 @@ const transactionLimiter = createRateLimiter(100, 60); // 100 requests per minut
 // Get all transactions with pagination
 router.get("/", transactionLimiter, async (req, res) => {
   try {
+    // Validate userId is present
+    if (!req.userId) {
+      logger.error("Get transactions error: userId not found in request");
+      return sendInternalError(res, "User authentication failed");
+    }
+
+    // Check MongoDB connection
+    if (mongoose.connection.readyState !== 1) {
+      logger.error("MongoDB not connected. State:", mongoose.connection.readyState);
+      return sendInternalError(res, "Database connection failed");
+    }
+
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
     const skip = (page - 1) * limit;
@@ -24,10 +39,16 @@ router.get("/", transactionLimiter, async (req, res) => {
     const startDate = req.query.startDate;
     const endDate = req.query.endDate;
 
-    // Build query
-    const query = { userId: req.userId };
+    // Build query - ensure userId is ObjectId
+    const userId = typeof req.userId === 'string' 
+      ? new mongoose.Types.ObjectId(req.userId) 
+      : req.userId;
+    
+    const query = { userId };
     const accountId = req.query.accountId;
-    if (accountId) query.accountId = accountId;
+    if (accountId) {
+      query.accountId = new mongoose.Types.ObjectId(accountId);
+    }
     if (category) query.category = category;
     if (type) query.type = type;
     if (startDate || endDate) {
@@ -36,13 +57,20 @@ router.get("/", transactionLimiter, async (req, res) => {
       if (endDate) query.date.$lte = new Date(endDate);
     }
 
-    // Check cache
-    const cacheKey = `transactions:${req.userId}:${page}:${JSON.stringify(query)}`;
-    const cached = await getCache(cacheKey);
-    if (cached) {
-      return res.json(cached);
+    // Check cache (wrap in try-catch to handle Redis errors gracefully)
+    let cached = null;
+    try {
+      const cacheKey = `transactions:${req.userId}:${page}:${JSON.stringify(query)}`;
+      cached = await getCache(cacheKey);
+      if (cached) {
+        return res.json(cached);
+      }
+    } catch (cacheError) {
+      logger.warn("Cache read error (continuing without cache):", cacheError.message);
+      // Continue without cache if Redis fails
     }
 
+    // Query transactions with populate
     const transactions = await Transaction.find(query)
       .sort({ date: -1 })
       .skip(skip)
@@ -64,22 +92,47 @@ router.get("/", transactionLimiter, async (req, res) => {
       },
     };
 
-    // Cache for 1 minute
-    await setCache(cacheKey, result, 60);
+    // Cache for 1 minute (wrap in try-catch to handle Redis errors gracefully)
+    try {
+      const cacheKey = `transactions:${req.userId}:${page}:${JSON.stringify(query)}`;
+      await setCache(cacheKey, result, 60);
+    } catch (cacheError) {
+      logger.warn("Cache write error (continuing without cache):", cacheError.message);
+      // Continue without caching if Redis fails
+    }
 
     res.json(result);
   } catch (error) {
     logger.error("Get transactions error:", error);
-    sendInternalError(res);
+    logger.error("Error name:", error.name);
+    logger.error("Error message:", error.message);
+    logger.error("Error stack:", error.stack);
+    logger.error("Request userId:", req.userId);
+    logger.error("Request query:", req.query);
+    
+    // Send detailed error in development
+    const errorMessage = process.env.NODE_ENV === "development"
+      ? `${error.name}: ${error.message}`
+      : "Internal server error";
+    
+    sendInternalError(res, errorMessage);
   }
 });
 
 // Get transaction by ID
 router.get("/:id", transactionLimiter, async (req, res) => {
   try {
+    if (!req.userId) {
+      return sendInternalError(res, "User authentication failed");
+    }
+
+    const userId = typeof req.userId === 'string' 
+      ? new mongoose.Types.ObjectId(req.userId) 
+      : req.userId;
+
     const transaction = await Transaction.findOne({
       _id: req.params.id,
-      userId: req.userId,
+      userId: userId,
     });
 
     if (!transaction) {
@@ -89,23 +142,31 @@ router.get("/:id", transactionLimiter, async (req, res) => {
     res.json(transaction);
   } catch (error) {
     logger.error("Get transaction error:", error);
-    sendInternalError(res);
+    logger.error("Error details:", error.message);
+    sendInternalError(res, error.message || "Internal server error");
   }
 });
 
 // Create transaction
 router.post("/", transactionLimiter, async (req, res) => {
   try {
+    if (!req.userId) {
+      return sendInternalError(res, "User authentication failed");
+    }
+
     const validation = validateTransaction(req.body);
     if (!validation.isValid) {
       return sendValidationError(res, validation.errors);
     }
 
+    const userId = typeof req.userId === 'string' 
+      ? new mongoose.Types.ObjectId(req.userId) 
+      : req.userId;
+
     // Verify account belongs to user
-    const Account = (await import("../../../shared/models/Account.js")).default;
     const account = await Account.findOne({
       _id: req.body.accountId,
-      userId: req.userId,
+      userId: userId,
     });
 
     if (!account) {
@@ -114,7 +175,7 @@ router.post("/", transactionLimiter, async (req, res) => {
 
     const transaction = new Transaction({
       ...req.body,
-      userId: req.userId,
+      userId: userId,
       accountId: req.body.accountId,
     });
 
@@ -135,15 +196,24 @@ router.post("/", transactionLimiter, async (req, res) => {
     res.status(201).json(transaction);
   } catch (error) {
     logger.error("Create transaction error:", error);
-    sendInternalError(res);
+    logger.error("Error details:", error.message);
+    sendInternalError(res, error.message || "Internal server error");
   }
 });
 
 // Update transaction
 router.put("/:id", transactionLimiter, async (req, res) => {
   try {
+    if (!req.userId) {
+      return sendInternalError(res, "User authentication failed");
+    }
+
+    const userId = typeof req.userId === 'string' 
+      ? new mongoose.Types.ObjectId(req.userId) 
+      : req.userId;
+
     const transaction = await Transaction.findOneAndUpdate(
-      { _id: req.params.id, userId: req.userId },
+      { _id: req.params.id, userId: userId },
       req.body,
       { new: true, runValidators: true }
     );
@@ -159,16 +229,25 @@ router.put("/:id", transactionLimiter, async (req, res) => {
     res.json(transaction);
   } catch (error) {
     logger.error("Update transaction error:", error);
-    sendInternalError(res);
+    logger.error("Error details:", error.message);
+    sendInternalError(res, error.message || "Internal server error");
   }
 });
 
 // Delete transaction
 router.delete("/:id", transactionLimiter, async (req, res) => {
   try {
+    if (!req.userId) {
+      return sendInternalError(res, "User authentication failed");
+    }
+
+    const userId = typeof req.userId === 'string' 
+      ? new mongoose.Types.ObjectId(req.userId) 
+      : req.userId;
+
     const transaction = await Transaction.findOneAndDelete({
       _id: req.params.id,
-      userId: req.userId,
+      userId: userId,
     });
 
     if (!transaction) {
@@ -182,7 +261,8 @@ router.delete("/:id", transactionLimiter, async (req, res) => {
     res.json({ message: "Transaction deleted successfully" });
   } catch (error) {
     logger.error("Delete transaction error:", error);
-    sendInternalError(res);
+    logger.error("Error details:", error.message);
+    sendInternalError(res, error.message || "Internal server error");
   }
 });
 
@@ -262,13 +342,21 @@ router.get("/stats/summary", transactionLimiter, async (req, res) => {
 // Export transactions as CSV
 router.get("/export/csv", transactionLimiter, async (req, res) => {
   try {
+    if (!req.userId) {
+      return sendInternalError(res, "User authentication failed");
+    }
+
+    const userId = typeof req.userId === 'string' 
+      ? new mongoose.Types.ObjectId(req.userId) 
+      : req.userId;
+
     const startDate = req.query.startDate ? new Date(req.query.startDate) : null;
     const endDate = req.query.endDate ? new Date(req.query.endDate) : null;
     const category = req.query.category;
     const type = req.query.type;
 
     // Build query
-    const query = { userId: req.userId };
+    const query = { userId: userId };
     if (category) query.category = category;
     if (type) query.type = type;
     if (startDate || endDate) {
@@ -309,7 +397,8 @@ router.get("/export/csv", transactionLimiter, async (req, res) => {
     res.send(csvContent);
   } catch (error) {
     logger.error("Export CSV error:", error);
-    sendInternalError(res);
+    logger.error("Error details:", error.message);
+    sendInternalError(res, error.message || "Internal server error");
   }
 });
 

@@ -290,7 +290,14 @@ export default function TransactionsPage() {
 
       {error && (
         <Alert variant="destructive">
-          <AlertDescription>Failed to load transactions. Please try again.</AlertDescription>
+          <AlertDescription>
+            Failed to load transactions. Please try again.
+            {process.env.NODE_ENV === "development" && (
+              <div className="mt-2 text-xs">
+                Error: {error instanceof Error ? error.message : "Unknown error"}
+              </div>
+            )}
+          </AlertDescription>
         </Alert>
       )}
 

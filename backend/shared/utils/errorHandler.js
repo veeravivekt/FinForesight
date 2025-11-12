@@ -75,7 +75,11 @@ export const sendForbiddenError = (res, message = "Forbidden") => {
  * @param {string} message - Error message (defaults to generic message)
  */
 export const sendInternalError = (res, message = "Internal server error") => {
-  return sendError(res, 500, message, "INTERNAL_ERROR");
+  // In development, include more details
+  const errorMessage = process.env.NODE_ENV === "development" 
+    ? message 
+    : "Internal server error";
+  return sendError(res, 500, errorMessage, "INTERNAL_ERROR");
 };
 
 /**

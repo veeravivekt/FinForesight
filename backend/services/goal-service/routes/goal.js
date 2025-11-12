@@ -1,6 +1,7 @@
 import express from "express";
 import Goal from "../../../shared/models/Goal.js";
 import Transaction from "../../../shared/models/Transaction.js";
+import Account from "../../../shared/models/Account.js";
 import { createRateLimiter } from "../../../shared/middleware/rateLimiter.js";
 import { sendError, sendNotFoundError, sendValidationError, sendInternalError } from "../../../shared/utils/errorHandler.js";
 import { createServiceLogger } from "../../../shared/utils/logger.js";

@@ -13,7 +13,11 @@
     "dev:goal": "nodemon services/goal-service/index.js",
     "dev:gateway": "nodemon gateway/index.js",
     "start": "node gateway/index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "seed": "node scripts/seedTestData.js",
+    "create-test-user": "node scripts/createTestUser.js",
+    "clear-rate-limits": "node scripts/clearRateLimits.js",
+    "kill-ports": "node scripts/killPorts.js"
   },
   "keywords": [],
   "author": "",

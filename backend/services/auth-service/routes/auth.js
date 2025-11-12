@@ -12,9 +12,10 @@ import { createServiceLogger } from "../../../shared/utils/logger.js";
 const router = express.Router();
 const logger = createServiceLogger("auth-service");
 
-// Rate limiters
-const registerLimiter = createRateLimiter(5, 15 * 60); // 5 attempts per 15 minutes
-const loginLimiter = createRateLimiter(10, 15 * 60); // 10 attempts per 15 minutes
+// Rate limiters - very permissive limits for development
+// Set DISABLE_RATE_LIMIT=true in .env to completely disable rate limiting
+const registerLimiter = createRateLimiter(1000, 60); // 1000 attempts per minute (effectively disabled)
+const loginLimiter = createRateLimiter(1000, 60); // 1000 attempts per minute (effectively disabled)
 
 // Register
 router.post("/register", registerLimiter, async (req, res) => {

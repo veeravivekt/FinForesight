@@ -42,6 +42,22 @@ app.get("/health", (req, res) => {
   res.json({ status: "ok", service: "transaction-service" });
 });
 
+// Error handling middleware
+app.use((error, req, res, next) => {
+  serviceLogger.error("Unhandled error:", error);
+  serviceLogger.error("Error stack:", error.stack);
+  
+  const statusCode = error.statusCode || 500;
+  const message = process.env.NODE_ENV === "development"
+    ? error.message || "Internal server error"
+    : "Internal server error";
+  
+  res.status(statusCode).json({
+    error: message,
+    code: "INTERNAL_ERROR",
+  });
+});
+
 // Start server
 const startServer = async () => {
   try {

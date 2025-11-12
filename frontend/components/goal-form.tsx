@@ -196,15 +196,15 @@ export default function GoalForm({ goal, onSuccess, onCancel }: GoalFormProps) {
       <div className="space-y-2">
         <Label htmlFor="accountId">Account (Optional)</Label>
         <Select
-          value={watch("accountId") || ""}
-          onValueChange={(value) => setValue("accountId", value)}
+          value={watch("accountId") || "__none__"}
+          onValueChange={(value) => setValue("accountId", value === "__none__" ? "" : value)}
           disabled={isSubmitting}
         >
           <SelectTrigger>
             <SelectValue placeholder="Select account (optional)" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">No specific account</SelectItem>
+            <SelectItem value="__none__">No specific account</SelectItem>
             {accounts.map((acc) => (
               <SelectItem key={acc._id} value={acc._id}>
                 {acc.name}

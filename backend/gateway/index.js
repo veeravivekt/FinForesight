@@ -34,36 +34,62 @@ app.use(cors({
   credentials: true,
 }));
 
-// Rate limiter
-const gatewayLimiter = createRateLimiter(200, 60); // 200 requests per minute per IP
+// Rate limiter - very permissive for development
+// Note: Auth routes bypass this via their own rate limiters
+const gatewayLimiter = createRateLimiter(10000, 60); // 10000 requests per minute (effectively disabled for dev)
 app.use(gatewayLimiter);
 
 // Proxy function for API requests (JSON responses)
 const proxyRequest = async (serviceUrl, req, res, servicePathPrefix = "") => {
   try {
     // Express middleware strips the matched prefix from req.path
-    // So /api/auth/login becomes /login in req.path
-    // We need to prepend the service-specific prefix
-    const targetPath = servicePathPrefix + req.path;
+    // So /api/transactions becomes / in req.path when using app.use
+    // We need to construct the correct path
+    let targetPath = servicePathPrefix;
     
-    serviceLogger.info(`Proxying ${req.method} ${req.originalUrl} -> ${serviceUrl}${targetPath}`);
+    // If req.path is not just "/", append it
+    if (req.path && req.path !== "/") {
+      targetPath = servicePathPrefix + req.path;
+    } else if (req.path === "/" && servicePathPrefix) {
+      // If path is "/" and we have a prefix, use just the prefix
+      targetPath = servicePathPrefix;
+    }
+    
+    // Ensure path starts with /
+    if (!targetPath.startsWith("/")) {
+      targetPath = "/" + targetPath;
+    }
+    
+    // Build query string if needed
+    const queryString = req.query && Object.keys(req.query).length > 0
+      ? "?" + new URLSearchParams(req.query).toString()
+      : "";
+    
+    const fullUrl = `${serviceUrl}${targetPath}${queryString}`;
+    
+    serviceLogger.info(`Proxying ${req.method} ${req.originalUrl} -> ${fullUrl}`);
     
     const response = await axios({
       method: req.method,
-      url: `${serviceUrl}${targetPath}`,
+      url: fullUrl,
       data: req.body,
-      params: req.query,
       headers: {
-        ...req.headers,
-        host: undefined,
-        authorization: req.headers.authorization, // Forward auth header
+        "Content-Type": "application/json",
+        "Authorization": req.headers.authorization || "", // Forward auth header
       },
-      validateStatus: () => true,
+      validateStatus: () => true, // Accept all status codes
+      timeout: 30000, // 30 second timeout
     });
 
+    // Forward the response status and data
     return res.status(response.status).json(response.data);
   } catch (error) {
     serviceLogger.error("Proxy error:", error);
+    serviceLogger.error("Error details:", error.message);
+    if (error.response) {
+      serviceLogger.error("Response status:", error.response.status);
+      serviceLogger.error("Response data:", error.response.data);
+    }
     return sendInternalError(res);
   }
 };
@@ -71,17 +97,39 @@ const proxyRequest = async (serviceUrl, req, res, servicePathPrefix = "") => {
 // Proxy function for static files (binary responses)
 const proxyStaticFile = async (serviceUrl, req, res, servicePathPrefix = "") => {
   try {
-    const targetPath = servicePathPrefix + req.path;
+    // Express middleware strips the matched prefix from req.path when using app.use()
+    // But when using app.get(), req.path contains the full path
+    // We need to construct the correct path similar to proxyRequest
+    let targetPath = servicePathPrefix;
     
-    serviceLogger.debug(`Proxying static file ${req.method} ${req.originalUrl} -> ${serviceUrl}${targetPath}`);
+    // If req.path is not just "/", append it
+    if (req.path && req.path !== "/") {
+      targetPath = servicePathPrefix + req.path;
+    } else if (req.path === "/" && servicePathPrefix) {
+      // If path is "/" and we have a prefix, use just the prefix
+      targetPath = servicePathPrefix;
+    }
+    
+    // Ensure path starts with /
+    if (!targetPath.startsWith("/")) {
+      targetPath = "/" + targetPath;
+    }
+    
+    // Build query string if needed
+    const queryString = req.query && Object.keys(req.query).length > 0
+      ? "?" + new URLSearchParams(req.query).toString()
+      : "";
+    
+    const fullUrl = `${serviceUrl}${targetPath}${queryString}`;
+    
+    serviceLogger.debug(`Proxying static file ${req.method} ${req.originalUrl} -> ${fullUrl}`);
     
     const response = await axios({
       method: req.method,
-      url: `${serviceUrl}${targetPath}`,
+      url: fullUrl,
       headers: {
-        ...req.headers,
-        host: undefined,
-        authorization: req.headers.authorization, // Forward auth header
+        "Content-Type": req.headers["content-type"] || "application/json",
+        "Authorization": req.headers.authorization || "", // Forward auth header
       },
       responseType: 'arraybuffer', // Handle binary data
       validateStatus: () => true,
@@ -96,6 +144,11 @@ const proxyStaticFile = async (serviceUrl, req, res, servicePathPrefix = "") => 
     res.status(response.status).send(Buffer.from(response.data));
   } catch (error) {
     serviceLogger.error("Static file proxy error:", error);
+    serviceLogger.error("Error details:", error.message);
+    if (error.response) {
+      serviceLogger.error("Response status:", error.response.status);
+      serviceLogger.error("Response data:", error.response.data);
+    }
     sendInternalError(res);
   }
 };
@@ -113,7 +166,15 @@ app.use("/api/auth", async (req, res, next) => {
 // CSV export route (authentication required, returns CSV file)
 // Must be before /api/transactions to match first
 app.get("/api/transactions/export/csv", authenticate, (req, res) => {
-  proxyStaticFile(TRANSACTION_SERVICE, req, res, "/transactions/export");
+  // When using app.get(), req.path will be "/api/transactions/export/csv"
+  // We need to proxy to "/transactions/export/csv" on the service
+  // So we replace "/api/transactions" with "" to get "/export/csv"
+  // Modify req.path so proxyStaticFile constructs the correct path
+  const originalPath = req.path;
+  req.path = req.path.replace("/api/transactions", "");
+  proxyStaticFile(TRANSACTION_SERVICE, req, res, "/transactions");
+  // Restore original path (though it shouldn't matter after the response)
+  req.path = originalPath;
 });
 
 // Transaction routes (authentication required)
