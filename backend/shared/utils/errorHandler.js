@@ -78,8 +78,57 @@ export const sendInternalError = (res, message = "Internal server error") => {
   // In development, include more details
   const errorMessage = process.env.NODE_ENV === "development" 
     ? message 
-    : "Internal server error";
+    : "An unexpected error occurred. Please try again later.";
+  
+  logger.error("Internal error:", message);
   return sendError(res, 500, errorMessage, "INTERNAL_ERROR");
+};
+
+/**
+ * Send a user-friendly error message based on error type
+ * @param {Object} res - Express response object
+ * @param {Error} error - Error object
+ */
+export const sendUserFriendlyError = (res, error) => {
+  // Map common error types to user-friendly messages
+  const errorMessages = {
+    ValidationError: "Please check your input and try again.",
+    CastError: "Invalid data format provided.",
+    MongoServerError: (err) => {
+      if (err.code === 11000) {
+        return "This record already exists. Please use a different value.";
+      }
+      return "Database error occurred. Please try again.";
+    },
+    JsonWebTokenError: "Invalid authentication token. Please log in again.",
+    TokenExpiredError: "Your session has expired. Please log in again.",
+    MulterError: (err) => {
+      if (err.code === "LIMIT_FILE_SIZE") {
+        return "File is too large. Maximum size is 10MB.";
+      }
+      return "File upload error. Please try again.";
+    },
+  };
+
+  let userMessage = "An error occurred. Please try again.";
+
+  if (error.name && errorMessages[error.name]) {
+    if (typeof errorMessages[error.name] === "function") {
+      userMessage = errorMessages[error.name](error);
+    } else {
+      userMessage = errorMessages[error.name];
+    }
+  } else if (error.message && process.env.NODE_ENV === "development") {
+    userMessage = error.message;
+  }
+
+  logger.error("User-friendly error:", {
+    name: error.name,
+    message: error.message,
+    stack: error.stack,
+  });
+
+  return sendError(res, 500, userMessage, error.name || "ERROR");
 };
 
 /**

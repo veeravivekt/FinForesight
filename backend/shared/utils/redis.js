@@ -50,6 +50,47 @@ export const deleteCache = async (key) => {
   await redisClient.del(key);
 };
 
+// Pattern-based cache invalidation using SCAN
+export const invalidatePattern = async (pattern) => {
+  try {
+    const keys = [];
+    let cursor = 0;
+    
+    do {
+      // Redis v4 SCAN API: scan(cursor, { MATCH, COUNT })
+      const result = await redisClient.scan(cursor, {
+        MATCH: pattern,
+        COUNT: 100,
+      });
+      // Result format: { cursor: number, keys: string[] }
+      cursor = typeof result === 'object' && result.cursor !== undefined ? result.cursor : (Array.isArray(result) ? result[0] : 0);
+      const foundKeys = typeof result === 'object' && Array.isArray(result.keys) ? result.keys : (Array.isArray(result) && result.length > 1 ? result[1] : []);
+      keys.push(...foundKeys);
+    } while (cursor !== 0);
+
+    if (keys.length > 0) {
+      // Delete keys in batches to avoid blocking Redis
+      const batchSize = 100;
+      for (let i = 0; i < keys.length; i += batchSize) {
+        const batch = keys.slice(i, i + batchSize);
+        // del can take multiple keys as arguments or array
+        if (batch.length === 1) {
+          await redisClient.del(batch[0]);
+        } else {
+          await redisClient.del(batch);
+        }
+      }
+      logger.debug(`Invalidated ${keys.length} cache keys matching pattern: ${pattern}`);
+    }
+    
+    return keys.length;
+  } catch (error) {
+    logger.error(`Error invalidating cache pattern ${pattern}:`, error);
+    // Fallback: try to handle gracefully
+    return 0;
+  }
+};
+
 // Rate limiting
 export const checkRateLimit = async (key, limit = 100, window = 60) => {
   const current = await redisClient.incr(key);

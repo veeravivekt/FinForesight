@@ -5,6 +5,7 @@ import Account from "../../../shared/models/Account.js";
 import { createRateLimiter } from "../../../shared/middleware/rateLimiter.js";
 import { sendError, sendNotFoundError, sendValidationError, sendInternalError } from "../../../shared/utils/errorHandler.js";
 import { createServiceLogger } from "../../../shared/utils/logger.js";
+import { emitGoalEvent } from "../../../shared/utils/websocket.js";
 
 const router = express.Router();
 const logger = createServiceLogger("goal-service");
@@ -130,6 +131,25 @@ router.put("/:id", goalLimiter, async (req, res) => {
       { new: true, runValidators: true }
     );
 
+    // Emit WebSocket event if goal was completed
+    if (updatedGoal.isCompleted && !goal.isCompleted) {
+      const progress = updatedGoal.getProgress() / 100; // Convert percentage to decimal
+      emitGoalEvent(req.userId.toString(), "completed", {
+        ...updatedGoal.toObject(),
+        progress,
+      }).catch((error) => {
+        logger.warn("Failed to emit goal completed event:", error);
+      });
+    } else {
+      const progress = updatedGoal.getProgress() / 100; // Convert percentage to decimal
+      emitGoalEvent(req.userId.toString(), "updated", {
+        ...updatedGoal.toObject(),
+        progress,
+      }).catch((error) => {
+        logger.warn("Failed to emit goal updated event:", error);
+      });
+    }
+
     res.json(updatedGoal);
   } catch (error) {
     logger.error("Update goal error:", error);
@@ -199,6 +219,37 @@ router.post("/:id/contribute", goalLimiter, async (req, res) => {
       updateData,
       { new: true }
     );
+
+    // Emit WebSocket event for goal milestone
+    const oldProgress = goal.getProgress() / 100; // Convert percentage to decimal
+    const newProgress = updatedGoal.getProgress() / 100; // Convert percentage to decimal
+    
+    if (updatedGoal.isCompleted && !goal.isCompleted) {
+      emitGoalEvent(req.userId.toString(), "completed", {
+        ...updatedGoal.toObject(),
+        progress: newProgress,
+      }).catch((error) => {
+        logger.warn("Failed to emit goal completed event:", error);
+      });
+    } else if (newProgress >= 0.5 && oldProgress < 0.5) {
+      // 50% milestone
+      emitGoalEvent(req.userId.toString(), "milestone", {
+        ...updatedGoal.toObject(),
+        progress: newProgress,
+        milestone: "50%",
+      }).catch((error) => {
+        logger.warn("Failed to emit goal milestone event:", error);
+      });
+    } else if (newProgress >= 0.75 && oldProgress < 0.75) {
+      // 75% milestone
+      emitGoalEvent(req.userId.toString(), "milestone", {
+        ...updatedGoal.toObject(),
+        progress: newProgress,
+        milestone: "75%",
+      }).catch((error) => {
+        logger.warn("Failed to emit goal milestone event:", error);
+      });
+    }
 
     res.json(updatedGoal);
   } catch (error) {

@@ -11,6 +11,7 @@ import reportsRoutes from "./routes/reports.js";
 import { authenticate } from "../../shared/middleware/auth.js";
 import { connectDB } from "../../shared/utils/database.js";
 import { createServiceLogger } from "../../shared/utils/logger.js";
+import { startRecurringTransactionsCron } from "./cron/recurringTransactions.js";
 
 dotenv.config();
 
@@ -28,8 +29,42 @@ app.use(cors({
   credentials: true,
 }));
 
-// Serve uploaded receipt files
-app.use("/uploads/receipts", express.static(path.join(process.cwd(), "uploads", "receipts")));
+// Serve uploaded receipt files with authentication
+app.use("/uploads/receipts", authenticate, async (req, res, next) => {
+  // Verify user owns the receipt before serving
+  try {
+    const Receipt = (await import("../../shared/models/Receipt.js")).default;
+    const filename = req.path.split("/").pop();
+    
+    if (!filename) {
+      return res.status(404).json({ error: "File not found" });
+    }
+
+    // Find receipt by imageKey
+    const receipt = await Receipt.findOne({
+      imageKey: filename,
+      userId: req.userId,
+    });
+
+    if (!receipt) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+
+    // Serve the file
+    const filePath = path.join(process.cwd(), "uploads", "receipts", filename);
+    res.sendFile(filePath, (err) => {
+      if (err) {
+        serviceLogger.error("Error serving receipt file:", err);
+        if (!res.headersSent) {
+          res.status(404).json({ error: "File not found" });
+        }
+      }
+    });
+  } catch (error) {
+    serviceLogger.error("Error in receipt file serving:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
 
 // Routes
 app.use("/transactions", authenticate, transactionRoutes);
@@ -64,6 +99,9 @@ const startServer = async () => {
     await connectDB();
     app.listen(PORT, () => {
       serviceLogger.info(`Transaction Service running on port ${PORT}`);
+      
+      // Start recurring transactions cron job
+      startRecurringTransactionsCron();
     });
   } catch (error) {
     serviceLogger.error("Failed to start Transaction Service:", error);

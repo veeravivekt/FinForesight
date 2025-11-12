@@ -9,6 +9,9 @@ import pickle
 import os
 from datetime import datetime, timedelta
 import json
+import pytesseract
+from PIL import Image
+import re
 
 app = Flask(__name__)
 CORS(app)
@@ -178,6 +181,141 @@ def train():
             "message": "Model trained successfully",
             "accuracy": accuracy,
             "cv_scores": [float(s) for s in scores]
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/ocr/extract", methods=["POST"])
+def ocr_extract():
+    try:
+        data = request.json
+        image_path = data.get("image_path")
+        
+        if not image_path:
+            return jsonify({"error": "image_path is required"}), 400
+        
+        if not os.path.exists(image_path):
+            return jsonify({"error": "Image file not found"}), 404
+        
+        # Load and process image
+        try:
+            image = Image.open(image_path)
+            # Convert to RGB if necessary
+            if image.mode != 'RGB':
+                image = image.convert('RGB')
+        except Exception as e:
+            return jsonify({"error": f"Failed to load image: {str(e)}"}), 400
+        
+        # Extract text using OCR
+        try:
+            ocr_text = pytesseract.image_to_string(image)
+            ocr_data = pytesseract.image_to_data(image, output_type=pytesseract.Output.DICT)
+        except Exception as e:
+            return jsonify({"error": f"OCR processing failed: {str(e)}"}), 500
+        
+        # Extract structured data
+        merchant = None
+        amount = None
+        date = None
+        category = None
+        
+        # Extract amount (look for currency patterns)
+        amount_patterns = [
+            r'\$?\s*(\d+\.?\d{0,2})',  # $123.45 or 123.45
+            r'(\d+\.?\d{2})\s*\$',      # 123.45 $
+            r'total[:\s]*\$?\s*(\d+\.?\d{0,2})',  # Total: $123.45
+            r'amount[:\s]*\$?\s*(\d+\.?\d{0,2})',  # Amount: $123.45
+        ]
+        
+        for pattern in amount_patterns:
+            matches = re.findall(pattern, ocr_text, re.IGNORECASE)
+            if matches:
+                try:
+                    # Get the largest amount found (likely the total)
+                    amounts = [float(m) for m in matches]
+                    amount = max(amounts)
+                    break
+                except ValueError:
+                    continue
+        
+        # Extract merchant (usually first line or before amount)
+        lines = [line.strip() for line in ocr_text.split('\n') if line.strip()]
+        if lines:
+            # First non-empty line is often merchant name
+            merchant = lines[0][:50]  # Limit length
+        
+        # Extract date (look for date patterns)
+        date_patterns = [
+            r'(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})',  # MM/DD/YYYY or DD/MM/YYYY
+            r'(\d{4}[/-]\d{1,2}[/-]\d{1,2})',    # YYYY/MM/DD
+            r'([A-Z][a-z]+\s+\d{1,2},?\s+\d{4})',  # January 1, 2024
+        ]
+        
+        for pattern in date_patterns:
+            matches = re.findall(pattern, ocr_text)
+            if matches:
+                try:
+                    date_str = matches[0]
+                    # Try to parse common date formats
+                    for fmt in ['%m/%d/%Y', '%d/%m/%Y', '%Y-%m-%d', '%B %d, %Y', '%b %d, %Y']:
+                        try:
+                            date = datetime.strptime(date_str, fmt)
+                            break
+                        except ValueError:
+                            continue
+                    if date:
+                        break
+                except Exception:
+                    continue
+        
+        # Categorize based on merchant/description keywords
+        category_keywords = {
+            'Food': ['restaurant', 'cafe', 'food', 'grocery', 'supermarket', 'mcdonald', 'starbucks', 'pizza', 'dining'],
+            'Transport': ['uber', 'lyft', 'taxi', 'gas', 'fuel', 'parking', 'metro', 'bus', 'transit'],
+            'Shopping': ['amazon', 'target', 'walmart', 'store', 'shop', 'retail', 'mall'],
+            'Bills': ['electric', 'water', 'internet', 'phone', 'utility', 'bill', 'payment'],
+            'Entertainment': ['movie', 'cinema', 'netflix', 'spotify', 'theater', 'concert', 'ticket'],
+            'Healthcare': ['pharmacy', 'drug', 'hospital', 'doctor', 'medical', 'clinic', 'cvs', 'walgreens'],
+            'Education': ['school', 'university', 'course', 'tuition', 'bookstore'],
+            'Travel': ['hotel', 'flight', 'airline', 'airbnb', 'travel', 'booking'],
+        }
+        
+        text_lower = ocr_text.lower()
+        for cat, keywords in category_keywords.items():
+            if any(keyword in text_lower for keyword in keywords):
+                category = cat
+                break
+        
+        if not category:
+            category = 'Other'
+        
+        # Calculate confidence based on extracted data
+        confidence = 0.0
+        if amount:
+            confidence += 0.4
+        if merchant:
+            confidence += 0.3
+        if date:
+            confidence += 0.2
+        if category != 'Other':
+            confidence += 0.1
+        
+        return jsonify({
+            "ocr_data": {
+                "text": ocr_text,
+                "confidence": round(confidence, 2),
+                "word_count": len(ocr_text.split())
+            },
+            "merchant": merchant,
+            "amount": float(amount) if amount else None,
+            "date": date.isoformat() if date else None,
+            "category": category,
+            "extracted_fields": {
+                "has_amount": amount is not None,
+                "has_merchant": merchant is not None,
+                "has_date": date is not None,
+                "has_category": category != 'Other'
+            }
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500

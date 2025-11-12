@@ -95,17 +95,19 @@ const proxyRequest = async (serviceUrl, req, res, servicePathPrefix = "") => {
 };
 
 // Proxy function for static files (binary responses)
-const proxyStaticFile = async (serviceUrl, req, res, servicePathPrefix = "") => {
+const proxyStaticFile = async (serviceUrl, req, res, servicePathPrefix = "", pathOverride = null) => {
   try {
     // Express middleware strips the matched prefix from req.path when using app.use()
     // But when using app.get(), req.path contains the full path
     // We need to construct the correct path similar to proxyRequest
+    // Use pathOverride if provided (for cases where req.path needs to be modified)
+    const pathToUse = pathOverride !== null ? pathOverride : req.path;
     let targetPath = servicePathPrefix;
     
-    // If req.path is not just "/", append it
-    if (req.path && req.path !== "/") {
-      targetPath = servicePathPrefix + req.path;
-    } else if (req.path === "/" && servicePathPrefix) {
+    // If pathToUse is not just "/", append it
+    if (pathToUse && pathToUse !== "/") {
+      targetPath = servicePathPrefix + pathToUse;
+    } else if (pathToUse === "/" && servicePathPrefix) {
       // If path is "/" and we have a prefix, use just the prefix
       targetPath = servicePathPrefix;
     }
@@ -163,18 +165,27 @@ app.use("/api/auth", async (req, res, next) => {
   }
 });
 
-// CSV export route (authentication required, returns CSV file)
+// Export routes (authentication required, returns files)
 // Must be before /api/transactions to match first
 app.get("/api/transactions/export/csv", authenticate, (req, res) => {
-  // When using app.get(), req.path will be "/api/transactions/export/csv"
-  // We need to proxy to "/transactions/export/csv" on the service
-  // So we replace "/api/transactions" with "" to get "/export/csv"
-  // Modify req.path so proxyStaticFile constructs the correct path
-  const originalPath = req.path;
-  req.path = req.path.replace("/api/transactions", "");
-  proxyStaticFile(TRANSACTION_SERVICE, req, res, "/transactions");
-  // Restore original path (though it shouldn't matter after the response)
-  req.path = originalPath;
+  // req.path is read-only, so we need to manually construct the correct path
+  // Remove "/api/transactions" prefix from req.path to get "/export/csv"
+  const correctedPath = req.path.replace("/api/transactions", "");
+  proxyStaticFile(TRANSACTION_SERVICE, req, res, "/transactions", correctedPath);
+});
+
+app.get("/api/transactions/export/pdf", authenticate, (req, res) => {
+  // req.path is read-only, so we need to manually construct the correct path
+  // Remove "/api/transactions" prefix from req.path to get "/export/pdf"
+  const correctedPath = req.path.replace("/api/transactions", "");
+  proxyStaticFile(TRANSACTION_SERVICE, req, res, "/transactions", correctedPath);
+});
+
+app.get("/api/transactions/export/excel", authenticate, (req, res) => {
+  // req.path is read-only, so we need to manually construct the correct path
+  // Remove "/api/transactions" prefix from req.path to get "/export/excel"
+  const correctedPath = req.path.replace("/api/transactions", "");
+  proxyStaticFile(TRANSACTION_SERVICE, req, res, "/transactions", correctedPath);
 });
 
 // Transaction routes (authentication required)

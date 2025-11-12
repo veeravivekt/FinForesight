@@ -131,6 +131,95 @@ app.post("/predict/spend", authenticate, mlLimiter, async (req, res) => {
   }
 });
 
+// Categorize transaction endpoint
+app.post("/categorize", authenticate, mlLimiter, async (req, res) => {
+  try {
+    const { description, amount, merchant } = req.body;
+
+    if (!description) {
+      return sendError(res, 400, "Description is required", "VALIDATION_ERROR");
+    }
+
+    // Get user's transaction history for context
+    const userTransactions = await Transaction.find({
+      userId: req.userId,
+    }).sort({ date: -1 }).limit(100);
+
+    // Use pattern-based categorization (can be enhanced with ML model)
+    const categoryPatterns = {
+      Food: ["restaurant", "cafe", "food", "grocery", "supermarket", "mcdonald", "starbucks", "pizza", "dining", "eat"],
+      Transport: ["uber", "lyft", "taxi", "gas", "fuel", "parking", "metro", "bus", "transit", "ride"],
+      Shopping: ["amazon", "target", "walmart", "store", "shop", "retail", "mall", "purchase"],
+      Bills: ["electric", "water", "internet", "phone", "utility", "bill", "payment", "service"],
+      Entertainment: ["movie", "cinema", "netflix", "spotify", "theater", "concert", "ticket", "game"],
+      Healthcare: ["pharmacy", "drug", "hospital", "doctor", "medical", "clinic", "cvs", "walgreens", "health"],
+      Education: ["school", "university", "course", "tuition", "bookstore", "education", "learning"],
+      Travel: ["hotel", "flight", "airline", "airbnb", "travel", "booking", "trip", "vacation"],
+    };
+
+    let suggestedCategory = "Other";
+    let confidence = 0;
+
+    const lowerDescription = description.toLowerCase();
+    const lowerMerchant = merchant ? merchant.toLowerCase() : "";
+
+    // Pattern matching
+    for (const [category, patterns] of Object.entries(categoryPatterns)) {
+      for (const pattern of patterns) {
+        if (lowerDescription.includes(pattern) || lowerMerchant.includes(pattern)) {
+          suggestedCategory = category;
+          confidence = 0.8;
+          break;
+        }
+      }
+      if (confidence > 0) break;
+    }
+
+    // If no pattern match, check user's history
+    if (confidence === 0 && userTransactions.length > 0) {
+      const similarTransactions = userTransactions.filter(
+        (t) => {
+          const tDesc = t.description.toLowerCase();
+          const firstWord = lowerDescription.split(" ")[0];
+          return tDesc.includes(firstWord) || firstWord.length > 3 && tDesc.includes(firstWord.substring(0, 3));
+        }
+      );
+
+      if (similarTransactions.length > 0) {
+        const categoryCounts = {};
+        similarTransactions.forEach((t) => {
+          categoryCounts[t.category] = (categoryCounts[t.category] || 0) + 1;
+        });
+
+        const mostCommonCategory = Object.keys(categoryCounts).reduce((a, b) =>
+          categoryCounts[a] > categoryCounts[b] ? a : b
+        );
+
+        suggestedCategory = mostCommonCategory;
+        confidence = Math.min(categoryCounts[mostCommonCategory] / similarTransactions.length, 0.9);
+      }
+    }
+
+    // Amount-based heuristics (optional)
+    if (confidence < 0.5 && amount) {
+      if (amount > 1000 && suggestedCategory === "Other") {
+        // Large amounts might be bills or travel
+        suggestedCategory = amount > 5000 ? "Travel" : "Bills";
+        confidence = 0.6;
+      }
+    }
+
+    res.json({
+      category: suggestedCategory,
+      confidence: Math.round(confidence * 100) / 100,
+      method: confidence > 0.7 ? "pattern_match" : confidence > 0.4 ? "history_based" : "heuristic",
+    });
+  } catch (error) {
+    serviceLogger.error("Categorization error:", error);
+    sendInternalError(res);
+  }
+});
+
 // Train model endpoint
 app.post("/train", authenticate, async (req, res) => {
   try {

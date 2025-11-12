@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Download, TrendingUp, TrendingDown, DollarSign, FileText } from "lucide-react";
+import { Download, TrendingUp, TrendingDown, DollarSign, FileText, FileSpreadsheet, File } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
@@ -52,8 +52,8 @@ export default function ReportsPage() {
   const isLoading = reportType === "monthly" ? monthlyLoading : yearlyLoading;
   const reportData = reportType === "monthly" ? monthlyData : yearlyData;
 
-  // Handle CSV export
-  const handleExportCSV = async () => {
+  // Handle export function
+  const handleExport = async (format: "csv" | "pdf" | "excel") => {
     try {
       const startDate = reportType === "monthly"
         ? startOfMonth(new Date(selectedYear, selectedMonth - 1))
@@ -62,7 +62,7 @@ export default function ReportsPage() {
         ? endOfMonth(new Date(selectedYear, selectedMonth - 1))
         : new Date(selectedYear, 11, 31);
 
-      const url = `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000/api"}/transactions/export/csv?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`;
+      const url = `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000/api"}/transactions/export/${format}?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`;
       const token = localStorage.getItem("accessToken");
 
       const response = await fetch(url, {
@@ -77,14 +77,16 @@ export default function ReportsPage() {
       const downloadUrl = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = downloadUrl;
-      link.download = `transactions-${reportType}-${selectedYear}${reportType === "monthly" ? `-${selectedMonth}` : ""}.csv`;
+      
+      const extension = format === "pdf" ? "pdf" : format === "excel" ? "xlsx" : "csv";
+      link.download = `transactions-${reportType}-${selectedYear}${reportType === "monthly" ? `-${selectedMonth}` : ""}.${extension}`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(downloadUrl);
     } catch (error) {
       console.error("Export error:", error);
-      alert("Failed to export CSV. Please try again.");
+      alert(`Failed to export ${format.toUpperCase()}. Please try again.`);
     }
   };
 
@@ -183,10 +185,20 @@ export default function ReportsPage() {
           <h1 className="text-3xl font-bold">Reports</h1>
           <p className="text-gray-600 dark:text-gray-400">Financial reports and analytics</p>
         </div>
-        <Button onClick={handleExportCSV} variant="outline">
-          <Download className="mr-2 h-4 w-4" />
-          Export CSV
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={() => handleExport("csv")} variant="outline">
+            <Download className="mr-2 h-4 w-4" />
+            CSV
+          </Button>
+          <Button onClick={() => handleExport("excel")} variant="outline">
+            <FileSpreadsheet className="mr-2 h-4 w-4" />
+            Excel
+          </Button>
+          <Button onClick={() => handleExport("pdf")} variant="outline">
+            <File className="mr-2 h-4 w-4" />
+            PDF
+          </Button>
+        </div>
       </div>
 
       {/* Report Type Selector */}
