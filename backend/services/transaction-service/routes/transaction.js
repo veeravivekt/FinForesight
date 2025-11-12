@@ -41,6 +41,13 @@ router.get("/", transactionLimiter, async (req, res) => {
     const type = req.query.type;
     const startDate = req.query.startDate;
     const endDate = req.query.endDate;
+    const minAmount = req.query.minAmount;
+    const maxAmount = req.query.maxAmount;
+    const search = req.query.search; // Text search in description
+    const tags = req.query.tags; // Comma-separated tags
+    const merchant = req.query.merchant;
+    const isRecurring = req.query.isRecurring;
+    const isFlagged = req.query.isFlagged;
 
     // Build query - ensure userId is ObjectId
     const userId = typeof req.userId === 'string' 
@@ -58,6 +65,30 @@ router.get("/", transactionLimiter, async (req, res) => {
       query.date = {};
       if (startDate) query.date.$gte = new Date(startDate);
       if (endDate) query.date.$lte = new Date(endDate);
+    }
+    if (minAmount !== undefined) {
+      query.amount = query.amount || {};
+      query.amount.$gte = parseFloat(minAmount);
+    }
+    if (maxAmount !== undefined) {
+      query.amount = query.amount || {};
+      query.amount.$lte = parseFloat(maxAmount);
+    }
+    if (search) {
+      query.description = { $regex: search, $options: "i" };
+    }
+    if (tags) {
+      const tagArray = tags.split(",").map((t) => t.trim());
+      query.tags = { $in: tagArray };
+    }
+    if (merchant) {
+      query["merchant.name"] = { $regex: merchant, $options: "i" };
+    }
+    if (isRecurring !== undefined) {
+      query.isRecurring = isRecurring === "true";
+    }
+    if (isFlagged !== undefined) {
+      query.isFlagged = isFlagged === "true";
     }
 
     // Check cache (wrap in try-catch to handle Redis errors gracefully)
@@ -712,7 +743,8 @@ router.get("/export/excel", transactionLimiter, async (req, res) => {
     const transactions = await Transaction.find(query)
       .sort({ date: -1 })
       .populate("accountId", "name type")
-      .populate("toAccountId", "name");
+      .populate("toAccountId", "name")
+      .limit(10000); // Limit to prevent memory issues
 
     // Prepare data for Excel
     const worksheetData = [
@@ -761,6 +793,76 @@ router.get("/export/excel", transactionLimiter, async (req, res) => {
   }
 });
 
+// Export transactions as JSON
+router.get("/export/json", transactionLimiter, async (req, res) => {
+  try {
+    if (!req.userId) {
+      return sendInternalError(res, "User authentication failed");
+    }
+
+    const userId = typeof req.userId === "string"
+      ? new mongoose.Types.ObjectId(req.userId)
+      : req.userId;
+
+    const startDate = req.query.startDate ? new Date(req.query.startDate) : null;
+    const endDate = req.query.endDate ? new Date(req.query.endDate) : null;
+    const category = req.query.category;
+    const type = req.query.type;
+
+    // Build query
+    const query = { userId: userId };
+    if (category) query.category = category;
+    if (type) query.type = type;
+    if (startDate || endDate) {
+      query.date = {};
+      if (startDate) query.date.$gte = startDate;
+      if (endDate) query.date.$lte = endDate;
+    }
+
+    const transactions = await Transaction.find(query)
+      .sort({ date: -1 })
+      .populate("accountId", "name type")
+      .populate("toAccountId", "name")
+      .lean();
+
+    // Format transactions for export
+    const exportData = {
+      exportedAt: new Date().toISOString(),
+      dateRange: {
+        startDate: startDate?.toISOString() || null,
+        endDate: endDate?.toISOString() || null,
+      },
+      filters: {
+        category: category || null,
+        type: type || null,
+      },
+      totalTransactions: transactions.length,
+      transactions: transactions.map((t) => ({
+        id: t._id.toString(),
+        date: t.date,
+        type: t.type,
+        description: t.description,
+        category: t.category,
+        amount: t.amount,
+        account: t.accountId?.name || "N/A",
+        accountType: t.accountId?.type || null,
+        toAccount: t.toAccountId?.name || null,
+        merchant: t.merchant || null,
+        tags: t.tags || [],
+        createdAt: t.createdAt,
+        updatedAt: t.updatedAt,
+      })),
+    };
+
+    res.setHeader("Content-Type", "application/json");
+    res.setHeader("Content-Disposition", `attachment; filename="transactions-${Date.now()}.json"`);
+    res.json(exportData);
+  } catch (error) {
+    logger.error("Export JSON error:", error);
+    sendInternalError(res, error.message || "Internal server error");
+  }
+});
+
 // Export transactions as CSV
 router.get("/export/csv", transactionLimiter, async (req, res) => {
   try {
@@ -790,7 +892,8 @@ router.get("/export/csv", transactionLimiter, async (req, res) => {
     const transactions = await Transaction.find(query)
       .sort({ date: -1 })
       .populate("accountId", "name type")
-      .populate("toAccountId", "name");
+      .populate("toAccountId", "name")
+      .limit(10000); // Limit to prevent memory issues
 
     // Build CSV
     const headers = ["Date", "Type", "Description", "Category", "Amount", "Account", "To Account"];

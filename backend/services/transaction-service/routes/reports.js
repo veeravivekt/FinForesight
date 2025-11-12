@@ -246,5 +246,175 @@ router.get("/yearly", reportsLimiter, async (req, res) => {
   }
 });
 
+// Get custom date range report
+router.get("/custom", reportsLimiter, async (req, res) => {
+  try {
+    const startDate = new Date(req.query.startDate);
+    const endDate = new Date(req.query.endDate);
+
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+      return res.status(400).json({
+        error: "Invalid date range. Please provide valid startDate and endDate.",
+        code: "VALIDATION_ERROR",
+      });
+    }
+
+    if (startDate > endDate) {
+      return res.status(400).json({
+        error: "Start date must be before end date",
+        code: "VALIDATION_ERROR",
+      });
+    }
+
+    const cacheKey = `reports:custom:${req.userId}:${startDate.toISOString()}:${endDate.toISOString()}`;
+    const cached = await getCache(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+
+    // Get transactions for the date range
+    const transactions = await Transaction.find({
+      userId: req.userId,
+      date: { $gte: startDate, $lte: endDate },
+    })
+      .populate("accountId", "name type")
+      .sort({ date: -1 });
+
+    // Calculate totals
+    const totalIncome = transactions
+      .filter((t) => t.type === "income")
+      .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+
+    const totalExpense = transactions
+      .filter((t) => t.type === "expense")
+      .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+
+    const netAmount = totalIncome - totalExpense;
+
+    // Category breakdown
+    const categoryBreakdown = await Transaction.aggregate([
+      {
+        $match: {
+          userId: new mongoose.Types.ObjectId(req.userId),
+          date: { $gte: startDate, $lte: endDate },
+          type: "expense",
+        },
+      },
+      {
+        $group: {
+          _id: "$category",
+          total: { $sum: "$amount" },
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { total: -1 } },
+    ]);
+
+    // Daily spending trend
+    const dailyTrend = await Transaction.aggregate([
+      {
+        $match: {
+          userId: new mongoose.Types.ObjectId(req.userId),
+          date: { $gte: startDate, $lte: endDate },
+          type: "expense",
+        },
+      },
+      {
+        $group: {
+          _id: { $dateToString: { format: "%Y-%m-%d", date: "$date" } },
+          total: { $sum: "$amount" },
+        },
+      },
+      { $sort: { _id: 1 } },
+    ]);
+
+    const result = {
+      period: {
+        startDate,
+        endDate,
+      },
+      summary: {
+        totalIncome,
+        totalExpense,
+        netAmount,
+        transactionCount: transactions.length,
+      },
+      categoryBreakdown,
+      dailyTrend,
+      transactions: transactions.slice(0, 100), // Limit to 100 most recent
+    };
+
+    // Cache for 5 minutes
+    await setCache(cacheKey, result, 300);
+
+    res.json(result);
+  } catch (error) {
+    logger.error("Get custom report error:", error);
+    sendInternalError(res);
+  }
+});
+
+// Get budget vs actual comparison
+router.get("/budget-vs-actual", reportsLimiter, async (req, res) => {
+  try {
+    const year = parseInt(req.query.year) || new Date().getFullYear();
+    const month = parseInt(req.query.month) || new Date().getMonth() + 1;
+
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0, 23, 59, 59);
+
+    // Get active budgets
+    const budgets = await Budget.find({
+      userId: req.userId,
+      isActive: true,
+      startDate: { $lte: endDate },
+      $or: [{ endDate: null }, { endDate: { $gte: startDate } }],
+    });
+
+    // Get actual spending by category
+    const actualSpending = await Transaction.aggregate([
+      {
+        $match: {
+          userId: new mongoose.Types.ObjectId(req.userId),
+          date: { $gte: startDate, $lte: endDate },
+          type: "expense",
+        },
+      },
+      {
+        $group: {
+          _id: "$category",
+          total: { $sum: "$amount" },
+        },
+      },
+    ]);
+
+    // Combine budget and actual
+    const comparison = budgets.map((budget) => {
+      const actual = actualSpending.find((a) => a._id === budget.category);
+      const actualAmount = actual ? Math.abs(actual.total) : 0;
+      const budgetAmount = budget.amount;
+      const variance = budgetAmount - actualAmount;
+      const percentageUsed = budgetAmount > 0 ? (actualAmount / budgetAmount) * 100 : 0;
+
+      return {
+        category: budget.category,
+        budgetAmount,
+        actualAmount,
+        variance,
+        percentageUsed: Math.round(percentageUsed * 100) / 100,
+        isOverBudget: actualAmount > budgetAmount,
+      };
+    });
+
+    res.json({
+      period: { year, month, startDate, endDate },
+      comparison,
+    });
+  } catch (error) {
+    logger.error("Get budget vs actual error:", error);
+    sendInternalError(res);
+  }
+});
+
 export default router;
 

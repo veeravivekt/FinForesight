@@ -53,7 +53,7 @@ export default function ReportsPage() {
   const reportData = reportType === "monthly" ? monthlyData : yearlyData;
 
   // Handle export function
-  const handleExport = async (format: "csv" | "pdf" | "excel") => {
+  const handleExport = async (format: "csv" | "pdf" | "excel" | "json") => {
     try {
       const startDate = reportType === "monthly"
         ? startOfMonth(new Date(selectedYear, selectedMonth - 1))
@@ -78,7 +78,7 @@ export default function ReportsPage() {
       const link = document.createElement("a");
       link.href = downloadUrl;
       
-      const extension = format === "pdf" ? "pdf" : format === "excel" ? "xlsx" : "csv";
+      const extension = format === "pdf" ? "pdf" : format === "excel" ? "xlsx" : format === "json" ? "json" : "csv";
       link.download = `transactions-${reportType}-${selectedYear}${reportType === "monthly" ? `-${selectedMonth}` : ""}.${extension}`;
       document.body.appendChild(link);
       link.click();
@@ -197,6 +197,10 @@ export default function ReportsPage() {
           <Button onClick={() => handleExport("pdf")} variant="outline">
             <File className="mr-2 h-4 w-4" />
             PDF
+          </Button>
+          <Button onClick={() => handleExport("json")} variant="outline">
+            <FileText className="mr-2 h-4 w-4" />
+            JSON
           </Button>
         </div>
       </div>

@@ -8,6 +8,8 @@ import transactionRoutes from "./routes/transaction.js";
 import recurringRoutes from "./routes/recurring.js";
 import receiptRoutes from "./routes/receipt.js";
 import reportsRoutes from "./routes/reports.js";
+import bulkRoutes from "./routes/bulk.js";
+import templateRoutes from "./routes/templates.js";
 import { authenticate } from "../../shared/middleware/auth.js";
 import { connectDB } from "../../shared/utils/database.js";
 import { createServiceLogger } from "../../shared/utils/logger.js";
@@ -68,6 +70,8 @@ app.use("/uploads/receipts", authenticate, async (req, res, next) => {
 
 // Routes
 app.use("/transactions", authenticate, transactionRoutes);
+app.use("/transactions/bulk", authenticate, bulkRoutes);
+app.use("/transactions/templates", authenticate, templateRoutes);
 app.use("/recurring", authenticate, recurringRoutes);
 app.use("/receipts", authenticate, receiptRoutes);
 app.use("/reports", authenticate, reportsRoutes);

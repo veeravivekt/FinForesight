@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import helmet from "helmet";
 import morgan from "morgan";
 import accountRoutes from "./routes/account.js";
+import historyRoutes from "./routes/history.js";
 import { authenticate } from "../../shared/middleware/auth.js";
 import { connectDB } from "../../shared/utils/database.js";
 import { createServiceLogger } from "../../shared/utils/logger.js";
@@ -26,6 +27,7 @@ app.use(cors({
 
 // Routes
 app.use("/accounts", authenticate, accountRoutes);
+app.use("/accounts", authenticate, historyRoutes);
 
 // Health check
 app.get("/health", (req, res) => {

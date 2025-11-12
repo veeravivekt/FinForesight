@@ -123,6 +123,27 @@ router.put("/:id", goalLimiter, async (req, res) => {
         req.body.isCompleted = true;
         req.body.completedAt = new Date();
       }
+      
+      // Check milestones and persist achievements
+      goal.currentAmount = newAmount;
+      const achievedMilestones = goal.checkMilestones();
+      if (achievedMilestones > 0) {
+        req.body.milestones = goal.milestones;
+      }
+    }
+    
+    // Update milestones if provided
+    if (req.body.milestones) {
+      req.body.milestones = req.body.milestones.map((m) => {
+        // Preserve achievedAt if milestone was already achieved
+        const existing = goal.milestones?.find(
+          (em) => em.percentage === m.percentage && em.achievedAt
+        );
+        return {
+          ...m,
+          achievedAt: existing?.achievedAt || m.achievedAt,
+        };
+      });
     }
 
     const updatedGoal = await Goal.findOneAndUpdate(
@@ -198,8 +219,18 @@ router.post("/:id/contribute", goalLimiter, async (req, res) => {
       return sendError(res, 400, "Goal is already completed", "VALIDATION_ERROR");
     }
 
+    // Calculate old progress BEFORE modifying goal
+    const oldProgress = goal.getProgress() / 100;
+
     const newAmount = goal.currentAmount + amount;
     const updateData = { currentAmount: newAmount };
+
+    // Check milestones before updating
+    goal.currentAmount = newAmount;
+    const achievedMilestones = goal.checkMilestones();
+    if (achievedMilestones > 0) {
+      updateData.milestones = goal.milestones;
+    }
 
     if (newAmount >= goal.targetAmount) {
       updateData.isCompleted = true;
@@ -221,7 +252,6 @@ router.post("/:id/contribute", goalLimiter, async (req, res) => {
     );
 
     // Emit WebSocket event for goal milestone
-    const oldProgress = goal.getProgress() / 100; // Convert percentage to decimal
     const newProgress = updatedGoal.getProgress() / 100; // Convert percentage to decimal
     
     if (updatedGoal.isCompleted && !goal.isCompleted) {

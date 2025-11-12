@@ -273,7 +273,56 @@ app.get("/api/transactions/export/excel", authenticate, async (req, res, next) =
   }
 });
 
+app.get("/api/transactions/export/json", authenticate, async (req, res, next) => {
+  try {
+    // req.path is read-only, so we need to manually construct the correct path
+    // Remove "/api/transactions" prefix from req.path to get "/export/json"
+    const correctedPath = req.path.replace("/api/transactions", "");
+    await proxyStaticFile(TRANSACTION_SERVICE, req, res, "/transactions", correctedPath);
+  } catch (error) {
+    serviceLogger.error("Export JSON route error:", error);
+    next(error);
+  }
+});
+
+// Bulk transaction routes (must be before catch-all transaction routes)
+app.use(`${apiPrefix}/transactions/bulk`, authenticate, async (req, res, next) => {
+  try {
+    await proxyRequest(TRANSACTION_SERVICE, req, res, "/transactions/bulk");
+  } catch (error) {
+    serviceLogger.error("Bulk transaction route error:", error);
+    next(error);
+  }
+});
+app.use("/api/transactions/bulk", authenticate, async (req, res, next) => {
+  try {
+    await proxyRequest(TRANSACTION_SERVICE, req, res, "/transactions/bulk");
+  } catch (error) {
+    serviceLogger.error("Bulk transaction route error:", error);
+    next(error);
+  }
+});
+
+// Transaction template routes (must be before catch-all transaction routes)
+app.use(`${apiPrefix}/transactions/templates`, authenticate, async (req, res, next) => {
+  try {
+    await proxyRequest(TRANSACTION_SERVICE, req, res, "/transactions/templates");
+  } catch (error) {
+    serviceLogger.error("Transaction template route error:", error);
+    next(error);
+  }
+});
+app.use("/api/transactions/templates", authenticate, async (req, res, next) => {
+  try {
+    await proxyRequest(TRANSACTION_SERVICE, req, res, "/transactions/templates");
+  } catch (error) {
+    serviceLogger.error("Transaction template route error:", error);
+    next(error);
+  }
+});
+
 // Transaction routes (authentication required) - Support both /api and /api/v1
+// This catch-all route must come AFTER specific routes like /bulk and /templates
 app.use(`${apiPrefix}/transactions`, authenticate, async (req, res, next) => {
   try {
     await proxyRequest(TRANSACTION_SERVICE, req, res, "/transactions");
