@@ -37,7 +37,7 @@ app.use("/uploads/receipts", authenticate, async (req, res, next) => {
   try {
     const Receipt = (await import("../../shared/models/Receipt.js")).default;
     const filename = req.path.split("/").pop();
-    
+
     if (!filename) {
       return res.status(404).json({ error: "File not found" });
     }
@@ -85,12 +85,12 @@ app.get("/health", (req, res) => {
 app.use((error, req, res, next) => {
   serviceLogger.error("Unhandled error:", error);
   serviceLogger.error("Error stack:", error.stack);
-  
+
   const statusCode = error.statusCode || 500;
   const message = process.env.NODE_ENV === "development"
     ? error.message || "Internal server error"
     : "Internal server error";
-  
+
   res.status(statusCode).json({
     error: message,
     code: "INTERNAL_ERROR",
@@ -103,7 +103,7 @@ const startServer = async () => {
     await connectDB();
     app.listen(PORT, () => {
       serviceLogger.info(`Transaction Service running on port ${PORT}`);
-      
+
       // Start recurring transactions cron job
       startRecurringTransactionsCron();
     });

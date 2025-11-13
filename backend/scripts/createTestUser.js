@@ -13,7 +13,7 @@ const createTestUser = async () => {
 
     // Check if test user already exists
     const existingUser = await User.findOne({ email: "test@finforesight.com" });
-    
+
     if (existingUser) {
       console.log("Test user already exists!");
       console.log("Email: test@finforesight.com");
@@ -33,7 +33,7 @@ const createTestUser = async () => {
     console.log("Test user created successfully!");
     console.log("Email: test@finforesight.com");
     console.log("Password: test123");
-    
+
     await mongoose.connection.close();
   } catch (error) {
     console.error("Error creating test user:", error);

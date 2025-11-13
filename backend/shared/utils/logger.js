@@ -10,25 +10,25 @@ const { combine, timestamp, printf, colorize, errors } = winston.format;
 // Define log format
 const logFormat = printf(({ level, message, timestamp, stack, requestId, ...meta }) => {
   let log = `${timestamp} [${level}]: ${message}`;
-  
+
   // Add request ID if present
   if (requestId) {
     log = `${timestamp} [${level}] [${requestId}]: ${message}`;
   }
-  
+
   // Add stack trace for errors
   if (stack) {
     log += `\n${stack}`;
   }
-  
+
   // Add metadata if present (avoid circular references)
   if (Object.keys(meta).length > 0 && meta.constructor === Object) {
     try {
       const seen = new WeakSet();
       const cleaned = JSON.stringify(meta, (key, value) => {
-        if (typeof value === 'object' && value !== null) {
+        if (typeof value === "object" && value !== null) {
           if (seen.has(value)) {
-            return '[Circular]';
+            return "[Circular]";
           }
           seen.add(value);
         }
@@ -39,7 +39,7 @@ const logFormat = printf(({ level, message, timestamp, stack, requestId, ...meta
       log += `\n[Metadata serialization error: ${e.message}]`;
     }
   }
-  
+
   return log;
 });
 
@@ -49,7 +49,7 @@ const logger = winston.createLogger({
   format: combine(
     errors({ stack: true }),
     timestamp({ format: "YYYY-MM-DD HH:mm:ss" }),
-    logFormat
+    logFormat,
   ),
   defaultMeta: { service: process.env.SERVICE_NAME || "finforesight" },
   transports: [
@@ -57,7 +57,7 @@ const logger = winston.createLogger({
     new winston.transports.Console({
       format: combine(
         colorize(),
-        logFormat
+        logFormat,
       ),
     }),
     // File transport for errors
@@ -66,7 +66,7 @@ const logger = winston.createLogger({
       level: "error",
       format: combine(
         timestamp(),
-        logFormat
+        logFormat,
       ),
     }),
     // File transport for all logs
@@ -74,7 +74,7 @@ const logger = winston.createLogger({
       filename: "logs/combined.log",
       format: combine(
         timestamp(),
-        logFormat
+        logFormat,
       ),
     }),
   ],
@@ -85,7 +85,7 @@ if (process.env.NODE_ENV !== "production") {
   logger.add(
     new winston.transports.Console({
       format: combine(colorize(), logFormat),
-    })
+    }),
   );
 }
 

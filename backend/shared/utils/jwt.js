@@ -15,7 +15,7 @@ const JWT_REFRESH_EXPIRES_IN = process.env.JWT_REFRESH_EXPIRES_IN || "7d";
  */
 export const generateTokens = (userId, tokenFamilyId = null) => {
   const familyId = tokenFamilyId || randomUUID();
-  
+
   const accessToken = jwt.sign({ userId }, JWT_SECRET, {
     expiresIn: JWT_EXPIRES_IN,
   });
@@ -25,7 +25,7 @@ export const generateTokens = (userId, tokenFamilyId = null) => {
     JWT_REFRESH_SECRET,
     {
       expiresIn: JWT_REFRESH_EXPIRES_IN,
-    }
+    },
   );
 
   return { accessToken, refreshToken, tokenFamilyId: familyId };
@@ -40,7 +40,7 @@ export const generateTokens = (userId, tokenFamilyId = null) => {
 export const rotateRefreshToken = async (userId, oldTokenFamilyId) => {
   // Delete old token family from Redis
   await deleteSession(`${userId}:${oldTokenFamilyId}`);
-  
+
   // Generate new tokens with new family ID
   return generateTokens(userId);
 };

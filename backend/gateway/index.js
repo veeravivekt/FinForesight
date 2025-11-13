@@ -54,7 +54,7 @@ app.use(
       includeSubDomains: true,
       preload: true,
     },
-  })
+  }),
 );
 app.use(helmet.crossOriginResourcePolicy({ policy: "cross-origin" }));
 app.use(morgan("common"));
@@ -89,7 +89,7 @@ const proxyRequest = async (serviceUrl, req, res, servicePathPrefix = "") => {
     // So /api/transactions becomes / in req.path when using app.use
     // We need to construct the correct path
     let targetPath = servicePathPrefix;
-    
+
     // If req.path is not just "/", append it
     if (req.path && req.path !== "/") {
       targetPath = servicePathPrefix + req.path;
@@ -97,21 +97,21 @@ const proxyRequest = async (serviceUrl, req, res, servicePathPrefix = "") => {
       // If path is "/" and we have a prefix, use just the prefix
       targetPath = servicePathPrefix;
     }
-    
+
     // Ensure path starts with /
     if (!targetPath.startsWith("/")) {
-      targetPath = "/" + targetPath;
+      targetPath = `/${  targetPath}`;
     }
-    
+
     // Build query string if needed
     const queryString = req.query && Object.keys(req.query).length > 0
-      ? "?" + new URLSearchParams(req.query).toString()
+      ? `?${  new URLSearchParams(req.query).toString()}`
       : "";
-    
+
     const fullUrl = `${serviceUrl}${targetPath}${queryString}`;
-    
+
     serviceLogger.info(`Proxying ${req.method} ${req.originalUrl} -> ${fullUrl}`);
-    
+
     const response = await axios({
       method: req.method,
       url: fullUrl,
@@ -146,7 +146,7 @@ const proxyStaticFile = async (serviceUrl, req, res, servicePathPrefix = "", pat
     // Use pathOverride if provided (for cases where req.path needs to be modified)
     const pathToUse = pathOverride !== null ? pathOverride : req.path;
     let targetPath = servicePathPrefix;
-    
+
     // If pathToUse is not just "/", append it
     if (pathToUse && pathToUse !== "/") {
       targetPath = servicePathPrefix + pathToUse;
@@ -154,21 +154,21 @@ const proxyStaticFile = async (serviceUrl, req, res, servicePathPrefix = "", pat
       // If path is "/" and we have a prefix, use just the prefix
       targetPath = servicePathPrefix;
     }
-    
+
     // Ensure path starts with /
     if (!targetPath.startsWith("/")) {
-      targetPath = "/" + targetPath;
+      targetPath = `/${  targetPath}`;
     }
-    
+
     // Build query string if needed
     const queryString = req.query && Object.keys(req.query).length > 0
-      ? "?" + new URLSearchParams(req.query).toString()
+      ? `?${  new URLSearchParams(req.query).toString()}`
       : "";
-    
+
     const fullUrl = `${serviceUrl}${targetPath}${queryString}`;
-    
+
     serviceLogger.debug(`Proxying static file ${req.method} ${req.originalUrl} -> ${fullUrl}`);
-    
+
     const response = await axios({
       method: req.method,
       url: fullUrl,
@@ -176,16 +176,16 @@ const proxyStaticFile = async (serviceUrl, req, res, servicePathPrefix = "", pat
         "Content-Type": req.headers["content-type"] || "application/json",
         "Authorization": req.headers.authorization || "", // Forward auth header
       },
-      responseType: 'arraybuffer', // Handle binary data
+      responseType: "arraybuffer", // Handle binary data
       validateStatus: () => true,
     });
 
     // Set appropriate headers for file serving
     res.set({
-      'Content-Type': response.headers['content-type'] || 'application/octet-stream',
-      'Content-Length': response.headers['content-length'],
+      "Content-Type": response.headers["content-type"] || "application/octet-stream",
+      "Content-Length": response.headers["content-length"],
     });
-    
+
     res.status(response.status).send(Buffer.from(response.data));
   } catch (error) {
     serviceLogger.error("Static file proxy error:", error);

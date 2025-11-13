@@ -45,7 +45,7 @@ describe("validation", () => {
     it("should sanitize string input", () => {
       expect(sanitizeInput("  test  ")).toBe("test");
       expect(sanitizeInput("<script>alert('xss')</script>")).toBe(
-        "&lt;script&gt;alert(&#x27;xss&#x27;)&lt;&#x2F;script&gt;"
+        "&lt;script&gt;alert(&#x27;xss&#x27;)&lt;&#x2F;script&gt;",
       );
     });
 

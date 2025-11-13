@@ -46,7 +46,7 @@ router.post("/create", bulkLimiter, async (req, res) => {
     const accountIds = [...new Set(transactions.map((t) => t.accountId))];
     const accounts = await Account.find({
       _id: { $in: accountIds },
-      userId: userId,
+      userId,
     });
 
     const validAccountIds = new Set(accounts.map((a) => a._id.toString()));
@@ -80,7 +80,7 @@ router.post("/create", bulkLimiter, async (req, res) => {
         // Create transaction
         const transaction = new Transaction({
           ...transactionData,
-          userId: userId,
+          userId,
         });
 
         await transaction.save();
@@ -155,7 +155,7 @@ router.put("/update", bulkLimiter, async (req, res) => {
 
         const transaction = await Transaction.findOne({
           _id: id,
-          userId: userId,
+          userId,
         });
 
         if (!transaction) {
@@ -225,7 +225,7 @@ router.delete("/delete", bulkLimiter, async (req, res) => {
     // Delete transactions
     const result = await Transaction.deleteMany({
       _id: { $in: ids },
-      userId: userId,
+      userId,
     });
 
     // Emit WebSocket events

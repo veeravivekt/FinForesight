@@ -2,7 +2,7 @@ import validator from "validator";
 import createDOMPurify from "dompurify";
 import { JSDOM } from "jsdom";
 
-const window = new JSDOM("").window;
+const {window} = new JSDOM("");
 const DOMPurify = createDOMPurify(window);
 
 export const validateEmail = (email) => {
@@ -16,7 +16,7 @@ export const validateEmail = (email) => {
  */
 export const validatePassword = (password) => {
   const errors = [];
-  
+
   if (!password) {
     return { isValid: false, errors: ["Password is required"] };
   }
@@ -70,13 +70,13 @@ export const sanitizeInput = (input) => {
   if (typeof input === "string") {
     // First trim whitespace
     let sanitized = input.trim();
-    
+
     // Escape HTML entities using validator
     sanitized = validator.escape(sanitized);
-    
+
     // Additional DOM purification for extra safety
     sanitized = DOMPurify.sanitize(sanitized);
-    
+
     return sanitized;
   }
   return input;

@@ -50,7 +50,7 @@ const seedTestData = async () => {
 
     // Find or create test user
     let testUser = await User.findOne({ email: "test@finforesight.com" });
-    
+
     if (!testUser) {
       console.log("Test user not found. Creating test user...");
       testUser = new User({
@@ -79,7 +79,7 @@ const seedTestData = async () => {
     // Create accounts
     console.log("Creating accounts...");
     const accounts = [];
-    
+
     const accountData = [
       { name: "Main Checking", type: "checking", balance: 0, institution: "Chase Bank", color: "#3b82f6", accountNumber: "****1234" },
       { name: "Savings Account", type: "savings", balance: 0, institution: "Chase Bank", color: "#10b981", accountNumber: "****5678" },
@@ -114,7 +114,7 @@ const seedTestData = async () => {
     console.log("Creating transactions...");
     const now = new Date();
     const threeMonthsAgo = addDays(now, -90);
-    
+
     const transactionDescriptions = {
       Food: [
         { desc: "Whole Foods Market", merchant: "Whole Foods" },
@@ -193,7 +193,7 @@ const seedTestData = async () => {
       const date = addDays(threeMonthsAgo, i);
       const dayOfMonth = date.getDate();
       const dayOfWeek = date.getDay();
-      
+
       // Add salary on 1st of each month to checking account
       if (dayOfMonth === 1) {
         const salaryTransaction = new Transaction({
@@ -298,7 +298,7 @@ const seedTestData = async () => {
         await transferToSavings.save();
         transactions.push(transferToSavings);
         accountBalances[checkingAccount._id.toString()] -= transferAmount;
-        
+
         const transferToSavingsIncome = new Transaction({
           userId,
           accountId: savingsAccount._id,
@@ -316,7 +316,7 @@ const seedTestData = async () => {
       }
 
       // Skip some days (not every day has transactions)
-      if (Math.random() > 0.5) continue;
+      if (Math.random() > 0.5) {continue;}
 
       // Determine number of transactions per day (0-4)
       const transactionsPerDay = randomBetween(0, 4);
@@ -324,7 +324,7 @@ const seedTestData = async () => {
       for (let j = 0; j < transactionsPerDay; j++) {
         const category = randomElement(categories);
         const type = Math.random() > 0.9 ? "income" : "expense"; // 10% income, 90% expense
-        
+
         // Choose account based on transaction type
         let account;
         if (type === "income") {
@@ -337,7 +337,7 @@ const seedTestData = async () => {
             account = randomElement([checkingAccount, creditCardAccount, cashAccount]);
           }
         }
-        
+
         let amount;
         if (type === "income") {
           amount = randomFloat(100, 1000); // Small income transactions
@@ -599,22 +599,22 @@ const seedTestData = async () => {
     }
 
     console.log("\n✅ Test data seeding completed successfully!");
-    console.log(`\nSummary:`);
+    console.log("\nSummary:");
     console.log(`- Accounts: ${accounts.length}`);
     console.log(`- Transactions: ${transactionCount}`);
     console.log(`- Receipts: ${receiptCount}`);
     console.log(`- Budgets: ${budgetData.length}`);
     console.log(`- Goals: ${goalData.length}`);
     console.log(`- Recurring Transactions: ${recurringData.length}`);
-    console.log(`\nAccount Balances:`);
+    console.log("\nAccount Balances:");
     for (const account of accounts) {
       const balance = account.balance.toFixed(2);
       const sign = account.type === "credit_card" && account.balance < 0 ? "" : "$";
       console.log(`  - ${account.name}: ${sign}${balance}`);
     }
-    console.log(`\nTest User Credentials:`);
-    console.log(`Email: test@finforesight.com`);
-    console.log(`Password: test123`);
+    console.log("\nTest User Credentials:");
+    console.log("Email: test@finforesight.com");
+    console.log("Password: test123");
 
     await mongoose.connection.close();
   } catch (error) {

@@ -13,7 +13,7 @@ router.get("/", recurringLimiter, async (req, res) => {
   try {
     const { isActive } = req.query;
     const query = { userId: req.userId };
-    
+
     if (isActive !== undefined) {
       query.isActive = isActive === "true";
     }
@@ -111,7 +111,7 @@ router.put("/:id", recurringLimiter, async (req, res) => {
     const recurringTransaction = await RecurringTransaction.findOneAndUpdate(
       { _id: req.params.id, userId: req.userId },
       req.body,
-      { new: true, runValidators: true }
+      { new: true, runValidators: true },
     );
 
     if (!recurringTransaction) {

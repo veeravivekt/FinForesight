@@ -24,7 +24,7 @@ const storage = multer.diskStorage({
     cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    const uniqueSuffix = `${Date.now()  }-${  Math.round(Math.random() * 1e9)}`;
     cb(null, `receipt-${uniqueSuffix}${path.extname(file.originalname)}`);
   },
 });
@@ -36,7 +36,7 @@ const upload = multer({
     const allowedTypes = /jpeg|jpg|png|pdf/;
     const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
     const mimetype = allowedTypes.test(file.mimetype);
-    
+
     if (mimetype && extname) {
       return cb(null, true);
     }
@@ -49,9 +49,9 @@ router.get("/", receiptLimiter, async (req, res) => {
   try {
     const { transactionId, isProcessed } = req.query;
     const query = { userId: req.userId };
-    
-    if (transactionId) query.transactionId = transactionId;
-    if (isProcessed !== undefined) query.isProcessed = isProcessed === "true";
+
+    if (transactionId) {query.transactionId = transactionId;}
+    if (isProcessed !== undefined) {query.isProcessed = isProcessed === "true";}
 
     const receipts = await Receipt.find(query)
       .populate("transactionId", "description amount category date")
@@ -105,7 +105,7 @@ router.post("/upload", receiptLimiter, upload.single("image"), async (req, res) 
     try {
       const ML_SERVICE = process.env.ML_SERVICE_URL || "http://localhost:3003";
       const PYTHON_ML_SERVICE = process.env.PYTHON_ML_SERVICE_URL || "http://localhost:5000";
-      
+
       // Try to call OCR endpoint
       const ocrResponse = await axios.post(`${PYTHON_ML_SERVICE}/ocr/extract`, {
         image_path: filePath,
@@ -171,7 +171,7 @@ router.put("/:id/link", receiptLimiter, async (req, res) => {
     const receipt = await Receipt.findOneAndUpdate(
       { _id: req.params.id, userId: req.userId },
       { transactionId, isProcessed: true },
-      { new: true }
+      { new: true },
     );
 
     if (!receipt) {
@@ -229,13 +229,13 @@ router.post("/categorize", receiptLimiter, async (req, res) => {
           break;
         }
       }
-      if (confidence > 0) break;
+      if (confidence > 0) {break;}
     }
 
     // If no pattern match, check user's history
     if (confidence === 0 && userTransactions.length > 0) {
       const similarTransactions = userTransactions.filter(
-        (t) => t.description.toLowerCase().includes(lowerDescription.split(" ")[0])
+        (t) => t.description.toLowerCase().includes(lowerDescription.split(" ")[0]),
       );
 
       if (similarTransactions.length > 0) {
@@ -245,7 +245,7 @@ router.post("/categorize", receiptLimiter, async (req, res) => {
         });
 
         const mostCommonCategory = Object.keys(categoryCounts).reduce((a, b) =>
-          categoryCounts[a] > categoryCounts[b] ? a : b
+          categoryCounts[a] > categoryCounts[b] ? a : b,
         );
 
         suggestedCategory = mostCommonCategory;

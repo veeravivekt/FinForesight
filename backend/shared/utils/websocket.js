@@ -25,7 +25,7 @@ export async function emitWebSocketEvent(userId, event, data) {
       },
       {
         timeout: 5000,
-      }
+      },
     );
   } catch (error) {
     logger.warn(`Failed to emit WebSocket event ${event} for user ${userId}:`, error.message);

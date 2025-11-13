@@ -37,34 +37,34 @@ router.get("/", transactionLimiter, async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
     const skip = (page - 1) * limit;
-    const category = req.query.category;
-    const type = req.query.type;
-    const startDate = req.query.startDate;
-    const endDate = req.query.endDate;
-    const minAmount = req.query.minAmount;
-    const maxAmount = req.query.maxAmount;
-    const search = req.query.search; // Text search in description
-    const tags = req.query.tags; // Comma-separated tags
-    const merchant = req.query.merchant;
-    const isRecurring = req.query.isRecurring;
-    const isFlagged = req.query.isFlagged;
+    const {category} = req.query;
+    const {type} = req.query;
+    const {startDate} = req.query;
+    const {endDate} = req.query;
+    const {minAmount} = req.query;
+    const {maxAmount} = req.query;
+    const {search} = req.query; // Text search in description
+    const {tags} = req.query; // Comma-separated tags
+    const {merchant} = req.query;
+    const {isRecurring} = req.query;
+    const {isFlagged} = req.query;
 
     // Build query - ensure userId is ObjectId
-    const userId = typeof req.userId === 'string' 
-      ? new mongoose.Types.ObjectId(req.userId) 
+    const userId = typeof req.userId === "string"
+      ? new mongoose.Types.ObjectId(req.userId)
       : req.userId;
-    
+
     const query = { userId };
-    const accountId = req.query.accountId;
+    const {accountId} = req.query;
     if (accountId) {
       query.accountId = new mongoose.Types.ObjectId(accountId);
     }
-    if (category) query.category = category;
-    if (type) query.type = type;
+    if (category) {query.category = category;}
+    if (type) {query.type = type;}
     if (startDate || endDate) {
       query.date = {};
-      if (startDate) query.date.$gte = new Date(startDate);
-      if (endDate) query.date.$lte = new Date(endDate);
+      if (startDate) {query.date.$gte = new Date(startDate);}
+      if (endDate) {query.date.$lte = new Date(endDate);}
     }
     if (minAmount !== undefined) {
       query.amount = query.amount || {};
@@ -143,12 +143,12 @@ router.get("/", transactionLimiter, async (req, res) => {
     logger.error("Error stack:", error.stack);
     logger.error("Request userId:", req.userId);
     logger.error("Request query:", req.query);
-    
+
     // Send detailed error in development
     const errorMessage = process.env.NODE_ENV === "development"
       ? `${error.name}: ${error.message}`
       : "Internal server error";
-    
+
     sendInternalError(res, errorMessage);
   }
 });
@@ -160,13 +160,13 @@ router.get("/:id", transactionLimiter, async (req, res) => {
       return sendInternalError(res, "User authentication failed");
     }
 
-    const userId = typeof req.userId === 'string' 
-      ? new mongoose.Types.ObjectId(req.userId) 
+    const userId = typeof req.userId === "string"
+      ? new mongoose.Types.ObjectId(req.userId)
       : req.userId;
 
     const transaction = await Transaction.findOne({
       _id: req.params.id,
-      userId: userId,
+      userId,
     });
 
     if (!transaction) {
@@ -193,14 +193,14 @@ router.post("/", transactionLimiter, async (req, res) => {
       return sendValidationError(res, validation.errors);
     }
 
-    const userId = typeof req.userId === 'string' 
-      ? new mongoose.Types.ObjectId(req.userId) 
+    const userId = typeof req.userId === "string"
+      ? new mongoose.Types.ObjectId(req.userId)
       : req.userId;
 
     // Verify account belongs to user
     const account = await Account.findOne({
       _id: req.body.accountId,
-      userId: userId,
+      userId,
     });
 
     if (!account) {
@@ -208,14 +208,14 @@ router.post("/", transactionLimiter, async (req, res) => {
     }
 
     // Auto-categorize if category not provided
-    let category = req.body.category;
+    let {category} = req.body;
     let autoCategorized = false;
     let categorizationConfidence = 0;
 
     if (!category && req.body.description) {
       const ML_SERVICE_URL = process.env.ML_SERVICE_URL || "http://localhost:3003";
       const AUTO_CATEGORIZE_ENABLED = process.env.AUTO_CATEGORIZE_ENABLED !== "false";
-      
+
       if (AUTO_CATEGORIZE_ENABLED) {
         try {
           const categorizeResponse = await axios.post(
@@ -230,9 +230,9 @@ router.post("/", transactionLimiter, async (req, res) => {
                 Authorization: req.headers.authorization || "",
               },
               timeout: 3000,
-            }
+            },
           );
-          
+
           if (categorizeResponse.data.category) {
             category = categorizeResponse.data.category;
             autoCategorized = true;
@@ -250,7 +250,7 @@ router.post("/", transactionLimiter, async (req, res) => {
     const transaction = new Transaction({
       ...req.body,
       category: category || req.body.category || "Other",
-      userId: userId,
+      userId,
       accountId: req.body.accountId,
       autoCategorized,
       categorizationConfidence,
@@ -277,7 +277,7 @@ router.post("/", transactionLimiter, async (req, res) => {
         userId.toString(),
         req.body.category,
         req.body.amount,
-        req.body.date ? new Date(req.body.date) : new Date()
+        req.body.date ? new Date(req.body.date) : new Date(),
       ).catch((error) => {
         logger.warn("Budget alert check failed:", error);
       });
@@ -286,7 +286,7 @@ router.post("/", transactionLimiter, async (req, res) => {
     // Check fraud detection (async, don't wait for completion)
     const ML_SERVICE_URL = process.env.ML_SERVICE_URL || "http://localhost:3003";
     const FRAUD_DETECTION_ENABLED = process.env.FRAUD_DETECTION_ENABLED !== "false";
-    
+
     if (FRAUD_DETECTION_ENABLED && transaction.type === "expense") {
       axios.post(
         `${ML_SERVICE_URL}/fraud/detect`,
@@ -304,13 +304,13 @@ router.post("/", transactionLimiter, async (req, res) => {
             Authorization: req.headers.authorization || "",
           },
           timeout: 5000,
-        }
+        },
       )
         .then(async (response) => {
           const fraudData = response.data;
           if (fraudData.isFraudulent || fraudData.fraudScore > 0.7) {
             logger.warn(`Fraud detected for transaction ${transaction._id}: Score ${fraudData.fraudScore}`);
-            
+
             // Update transaction with fraud score
             await Transaction.findByIdAndUpdate(transaction._id, {
               fraudScore: fraudData.fraudScore,
@@ -338,7 +338,7 @@ router.post("/", transactionLimiter, async (req, res) => {
                     Authorization: req.headers.authorization || "",
                   },
                   timeout: 5000,
-                }
+                },
               );
             } catch (notifError) {
               logger.warn("Failed to send fraud notification:", notifError.message);
@@ -380,14 +380,14 @@ router.put("/:id", transactionLimiter, async (req, res) => {
       return sendInternalError(res, "User authentication failed");
     }
 
-    const userId = typeof req.userId === 'string' 
-      ? new mongoose.Types.ObjectId(req.userId) 
+    const userId = typeof req.userId === "string"
+      ? new mongoose.Types.ObjectId(req.userId)
       : req.userId;
 
     const transaction = await Transaction.findOneAndUpdate(
-      { _id: req.params.id, userId: userId },
+      { _id: req.params.id, userId },
       req.body,
-      { new: true, runValidators: true }
+      { new: true, runValidators: true },
     );
 
     if (!transaction) {
@@ -405,7 +405,7 @@ router.put("/:id", transactionLimiter, async (req, res) => {
         userId.toString(),
         transaction.category,
         transaction.amount,
-        transaction.date || new Date()
+        transaction.date || new Date(),
       ).catch((error) => {
         logger.warn("Budget alert check failed:", error);
       });
@@ -435,13 +435,13 @@ router.delete("/:id", transactionLimiter, async (req, res) => {
       return sendInternalError(res, "User authentication failed");
     }
 
-    const userId = typeof req.userId === 'string' 
-      ? new mongoose.Types.ObjectId(req.userId) 
+    const userId = typeof req.userId === "string"
+      ? new mongoose.Types.ObjectId(req.userId)
       : req.userId;
 
     const transaction = await Transaction.findOneAndDelete({
       _id: req.params.id,
-      userId: userId,
+      userId,
     });
 
     if (!transaction) {
@@ -551,23 +551,23 @@ router.get("/export/pdf", transactionLimiter, async (req, res) => {
     }
 
     const PDFDocument = (await import("pdfkit")).default;
-    const userId = typeof req.userId === 'string' 
-      ? new mongoose.Types.ObjectId(req.userId) 
+    const userId = typeof req.userId === "string"
+      ? new mongoose.Types.ObjectId(req.userId)
       : req.userId;
 
     const startDate = req.query.startDate ? new Date(req.query.startDate) : null;
     const endDate = req.query.endDate ? new Date(req.query.endDate) : null;
-    const category = req.query.category;
-    const type = req.query.type;
+    const {category} = req.query;
+    const {type} = req.query;
 
     // Build query
-    const query = { userId: userId };
-    if (category) query.category = category;
-    if (type) query.type = type;
+    const query = { userId };
+    if (category) {query.category = category;}
+    if (type) {query.type = type;}
     if (startDate || endDate) {
       query.date = {};
-      if (startDate) query.date.$gte = startDate;
-      if (endDate) query.date.$lte = endDate;
+      if (startDate) {query.date.$gte = startDate;}
+      if (endDate) {query.date.$lte = endDate;}
     }
 
     const transactions = await Transaction.find(query)
@@ -587,23 +587,23 @@ router.get("/export/pdf", transactionLimiter, async (req, res) => {
 
     // Create PDF document
     const doc = new PDFDocument({ margin: 50 });
-    
+
     // Set response headers
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="transactions-${Date.now()}.pdf"`);
-    
+
     // Pipe PDF to response
     doc.pipe(res);
 
     // Header
     doc.fontSize(20).text("Transaction Report", { align: "center" });
     doc.moveDown();
-    
+
     // Date range
     if (startDate || endDate) {
       doc.fontSize(12).text(
         `Period: ${startDate ? startDate.toLocaleDateString() : "Beginning"} - ${endDate ? endDate.toLocaleDateString() : "End"}`,
-        { align: "center" }
+        { align: "center" },
       );
     } else {
       doc.fontSize(12).text(`Generated: ${new Date().toLocaleDateString()}`, { align: "center" });
@@ -624,7 +624,7 @@ router.get("/export/pdf", transactionLimiter, async (req, res) => {
     // Transactions table header
     doc.fontSize(14).text("Transactions", { underline: true });
     doc.moveDown();
-    
+
     // Table headers
     const tableTop = doc.y;
     doc.fontSize(10).font("Helvetica-Bold");
@@ -634,7 +634,7 @@ router.get("/export/pdf", transactionLimiter, async (req, res) => {
     doc.text("Type", 350, doc.y);
     doc.text("Amount", 400, doc.y);
     doc.text("Account", 470, doc.y);
-    
+
     // Draw line under header
     doc.moveTo(50, doc.y + 5).lineTo(550, doc.y + 5).stroke();
     doc.moveDown();
@@ -644,7 +644,7 @@ router.get("/export/pdf", transactionLimiter, async (req, res) => {
     let yPosition = doc.y;
     const rowHeight = 15;
     const pageHeight = 750;
-    
+
     transactions.forEach((transaction, index) => {
       // Check if we need a new page
       if (yPosition > pageHeight) {
@@ -688,7 +688,7 @@ router.get("/export/pdf", transactionLimiter, async (req, res) => {
 
       // Reset color
       doc.fillColor("black");
-      
+
       yPosition += rowHeight;
     });
 
@@ -700,7 +700,7 @@ router.get("/export/pdf", transactionLimiter, async (req, res) => {
         `Page ${i + 1} of ${totalPages} - Generated ${new Date().toLocaleString()}`,
         50,
         pageHeight - 20,
-        { align: "center" }
+        { align: "center" },
       );
     }
 
@@ -721,23 +721,23 @@ router.get("/export/excel", transactionLimiter, async (req, res) => {
     }
 
     const ExcelJS = (await import("exceljs")).default;
-    const userId = typeof req.userId === 'string' 
-      ? new mongoose.Types.ObjectId(req.userId) 
+    const userId = typeof req.userId === "string"
+      ? new mongoose.Types.ObjectId(req.userId)
       : req.userId;
 
     const startDate = req.query.startDate ? new Date(req.query.startDate) : null;
     const endDate = req.query.endDate ? new Date(req.query.endDate) : null;
-    const category = req.query.category;
-    const type = req.query.type;
+    const {category} = req.query;
+    const {type} = req.query;
 
     // Build query
-    const query = { userId: userId };
-    if (category) query.category = category;
-    if (type) query.type = type;
+    const query = { userId };
+    if (category) {query.category = category;}
+    if (type) {query.type = type;}
     if (startDate || endDate) {
       query.date = {};
-      if (startDate) query.date.$gte = startDate;
-      if (endDate) query.date.$lte = endDate;
+      if (startDate) {query.date.$gte = startDate;}
+      if (endDate) {query.date.$lte = endDate;}
     }
 
     const transactions = await Transaction.find(query)
@@ -809,17 +809,17 @@ router.get("/export/json", transactionLimiter, async (req, res) => {
 
     const startDate = req.query.startDate ? new Date(req.query.startDate) : null;
     const endDate = req.query.endDate ? new Date(req.query.endDate) : null;
-    const category = req.query.category;
-    const type = req.query.type;
+    const {category} = req.query;
+    const {type} = req.query;
 
     // Build query
-    const query = { userId: userId };
-    if (category) query.category = category;
-    if (type) query.type = type;
+    const query = { userId };
+    if (category) {query.category = category;}
+    if (type) {query.type = type;}
     if (startDate || endDate) {
       query.date = {};
-      if (startDate) query.date.$gte = startDate;
-      if (endDate) query.date.$lte = endDate;
+      if (startDate) {query.date.$gte = startDate;}
+      if (endDate) {query.date.$lte = endDate;}
     }
 
     const transactions = await Transaction.find(query)
@@ -873,23 +873,23 @@ router.get("/export/csv", transactionLimiter, async (req, res) => {
       return sendInternalError(res, "User authentication failed");
     }
 
-    const userId = typeof req.userId === 'string' 
-      ? new mongoose.Types.ObjectId(req.userId) 
+    const userId = typeof req.userId === "string"
+      ? new mongoose.Types.ObjectId(req.userId)
       : req.userId;
 
     const startDate = req.query.startDate ? new Date(req.query.startDate) : null;
     const endDate = req.query.endDate ? new Date(req.query.endDate) : null;
-    const category = req.query.category;
-    const type = req.query.type;
+    const {category} = req.query;
+    const {type} = req.query;
 
     // Build query
-    const query = { userId: userId };
-    if (category) query.category = category;
-    if (type) query.type = type;
+    const query = { userId };
+    if (category) {query.category = category;}
+    if (type) {query.type = type;}
     if (startDate || endDate) {
       query.date = {};
-      if (startDate) query.date.$gte = startDate;
-      if (endDate) query.date.$lte = endDate;
+      if (startDate) {query.date.$gte = startDate;}
+      if (endDate) {query.date.$lte = endDate;}
     }
 
     const transactions = await Transaction.find(query)

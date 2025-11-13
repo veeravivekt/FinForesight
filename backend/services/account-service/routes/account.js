@@ -22,8 +22,8 @@ router.get("/", accountLimiter, async (req, res) => {
       accounts.map(async (account) => {
         const transactions = await Transaction.find({ accountId: account._id });
         const balance = transactions.reduce((sum, t) => {
-          if (t.type === "income") return sum + t.amount;
-          if (t.type === "expense") return sum - t.amount;
+          if (t.type === "income") {return sum + t.amount;}
+          if (t.type === "expense") {return sum - t.amount;}
           return sum;
         }, account.balance || 0);
 
@@ -31,7 +31,7 @@ router.get("/", accountLimiter, async (req, res) => {
           ...account.toObject(),
           calculatedBalance: balance,
         };
-      })
+      }),
     );
 
     res.json({ accounts: accountsWithBalances });
@@ -56,8 +56,8 @@ router.get("/:id", accountLimiter, async (req, res) => {
     // Calculate balance
     const transactions = await Transaction.find({ accountId: account._id });
     const balance = transactions.reduce((sum, t) => {
-      if (t.type === "income") return sum + t.amount;
-      if (t.type === "expense") return sum - t.amount;
+      if (t.type === "income") {return sum + t.amount;}
+      if (t.type === "expense") {return sum - t.amount;}
       return sum;
     }, account.balance || 0);
 
@@ -106,7 +106,7 @@ router.put("/:id", accountLimiter, async (req, res) => {
     const account = await Account.findOneAndUpdate(
       { _id: req.params.id, userId: req.userId },
       req.body,
-      { new: true, runValidators: true }
+      { new: true, runValidators: true },
     );
 
     if (!account) {
@@ -126,7 +126,7 @@ router.delete("/:id", accountLimiter, async (req, res) => {
     const account = await Account.findOneAndUpdate(
       { _id: req.params.id, userId: req.userId },
       { isArchived: true },
-      { new: true }
+      { new: true },
     );
 
     if (!account) {
@@ -175,7 +175,7 @@ router.post("/transfer", accountLimiter, async (req, res) => {
       description: description || `Transfer to ${toAccount.name}`,
       category: "Other",
       type: "transfer",
-      toAccountId: toAccountId,
+      toAccountId,
       date: date || new Date(),
     });
 

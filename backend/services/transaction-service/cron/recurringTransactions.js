@@ -62,10 +62,10 @@ function calculateNextDueDate(currentDate, frequency, dayOfMonth, dayOfWeek) {
 function isDueToday(nextDueDate) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  
+
   const dueDate = new Date(nextDueDate);
   dueDate.setHours(0, 0, 0, 0);
-  
+
   return dueDate.getTime() === today.getTime();
 }
 
@@ -127,7 +127,7 @@ async function processRecurringTransactions() {
             recurring.nextDueDate,
             recurring.frequency,
             recurring.dayOfMonth,
-            recurring.dayOfWeek
+            recurring.dayOfWeek,
           );
           await RecurringTransaction.findByIdAndUpdate(recurring._id, {
             nextDueDate,
@@ -164,7 +164,7 @@ async function processRecurringTransactions() {
           recurring.nextDueDate,
           recurring.frequency,
           recurring.dayOfMonth,
-          recurring.dayOfWeek
+          recurring.dayOfWeek,
         );
 
         await RecurringTransaction.findByIdAndUpdate(recurring._id, {
@@ -192,7 +192,7 @@ async function processRecurringTransactions() {
 export function startRecurringTransactionsCron() {
   // Run daily at 2 AM (configurable via env)
   const cronSchedule = process.env.RECURRING_TRANSACTIONS_CRON_SCHEDULE || "0 2 * * *";
-  
+
   logger.info(`Setting up recurring transactions cron job with schedule: ${cronSchedule}`);
 
   // Ensure database is connected before starting cron

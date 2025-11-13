@@ -24,7 +24,7 @@ router.get("/", async (req, res) => {
   try {
     if (isDBConnected() && mongoose.connection.readyState === 1) {
       health.checks.database = "connected";
-      
+
       // Test database query
       await mongoose.connection.db.admin().ping();
       health.checks.database = "healthy";

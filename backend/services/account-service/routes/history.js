@@ -36,8 +36,8 @@ router.get("/:id/history", historyLimiter, async (req, res) => {
 
     if (startDate || endDate) {
       query.date = {};
-      if (startDate) query.date.$gte = startDate;
-      if (endDate) query.date.$lte = endDate;
+      if (startDate) {query.date.$gte = startDate;}
+      if (endDate) {query.date.$lte = endDate;}
     }
 
     const history = await AccountBalanceHistory.find(query)
@@ -69,8 +69,8 @@ router.post("/:id/history", historyLimiter, async (req, res) => {
     // Calculate current balance from transactions
     const transactions = await Transaction.find({ accountId: account._id });
     const balance = transactions.reduce((sum, t) => {
-      if (t.type === "income") return sum + t.amount;
-      if (t.type === "expense") return sum - t.amount;
+      if (t.type === "income") {return sum + t.amount;}
+      if (t.type === "expense") {return sum - t.amount;}
       return sum;
     }, account.balance || 0);
 
@@ -132,8 +132,8 @@ router.get("/:id/trend", historyLimiter, async (req, res) => {
       // Calculate running balance
       let runningBalance = account.balance || 0;
       const trend = transactions.map((t) => {
-        if (t.type === "income") runningBalance += t.amount;
-        if (t.type === "expense") runningBalance -= t.amount;
+        if (t.type === "income") {runningBalance += t.amount;}
+        if (t.type === "expense") {runningBalance -= t.amount;}
         return {
           date: t.date,
           balance: runningBalance,

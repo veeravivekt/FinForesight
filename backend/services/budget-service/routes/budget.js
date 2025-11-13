@@ -27,16 +27,16 @@ router.get("/", budgetLimiter, async (req, res) => {
     }
 
     const { period, isActive } = req.query;
-    
+
     // Convert userId to ObjectId
-    const userId = typeof req.userId === 'string' 
-      ? new mongoose.Types.ObjectId(req.userId) 
+    const userId = typeof req.userId === "string"
+      ? new mongoose.Types.ObjectId(req.userId)
       : req.userId;
-    
+
     const query = { userId };
-    
-    if (period) query.period = period;
-    if (isActive !== undefined) query.isActive = isActive === "true";
+
+    if (period) {query.period = period;}
+    if (isActive !== undefined) {query.isActive = isActive === "true";}
 
     const budgets = await Budget.find(query).sort({ createdAt: -1 });
 
@@ -48,7 +48,7 @@ router.get("/", budgetLimiter, async (req, res) => {
           const endDate = budget.endDate || new Date();
 
           const expenses = await Transaction.find({
-            userId: userId,
+            userId,
             category: budget.category,
             type: "expense",
             date: { $gte: startDate, $lte: endDate },
@@ -77,7 +77,7 @@ router.get("/", budgetLimiter, async (req, res) => {
             isOverBudget: false,
           };
         }
-      })
+      }),
     );
 
     res.json({ budgets: budgetsWithSpending });
@@ -87,12 +87,12 @@ router.get("/", budgetLimiter, async (req, res) => {
     logger.error("Error message:", error.message);
     logger.error("Error stack:", error.stack);
     logger.error("Request userId:", req.userId);
-    
+
     // Send detailed error in development
     const errorMessage = process.env.NODE_ENV === "development"
       ? `${error.name}: ${error.message}`
       : "Internal server error";
-    
+
     sendInternalError(res, errorMessage);
   }
 });
@@ -104,13 +104,13 @@ router.get("/:id", budgetLimiter, async (req, res) => {
       return sendInternalError(res, "User authentication failed");
     }
 
-    const userId = typeof req.userId === 'string' 
-      ? new mongoose.Types.ObjectId(req.userId) 
+    const userId = typeof req.userId === "string"
+      ? new mongoose.Types.ObjectId(req.userId)
       : req.userId;
 
     const budget = await Budget.findOne({
       _id: req.params.id,
-      userId: userId,
+      userId,
     });
 
     if (!budget) {
@@ -122,7 +122,7 @@ router.get("/:id", budgetLimiter, async (req, res) => {
     const endDate = budget.endDate || new Date();
 
     const expenses = await Transaction.find({
-      userId: userId,
+      userId,
       category: budget.category,
       type: "expense",
       date: { $gte: startDate, $lte: endDate },
@@ -159,13 +159,13 @@ router.post("/", budgetLimiter, async (req, res) => {
       return sendValidationError(res, "Category, amount, and startDate are required");
     }
 
-    const userId = typeof req.userId === 'string' 
-      ? new mongoose.Types.ObjectId(req.userId) 
+    const userId = typeof req.userId === "string"
+      ? new mongoose.Types.ObjectId(req.userId)
       : req.userId;
 
     // Check for existing active budget for this category
     const existingBudget = await Budget.findOne({
-      userId: userId,
+      userId,
       category,
       isActive: true,
       startDate: { $lte: new Date() },
@@ -180,7 +180,7 @@ router.post("/", budgetLimiter, async (req, res) => {
     }
 
     const budget = new Budget({
-      userId: userId,
+      userId,
       category,
       amount,
       period: period || "monthly",
@@ -206,14 +206,14 @@ router.put("/:id", budgetLimiter, async (req, res) => {
       return sendInternalError(res, "User authentication failed");
     }
 
-    const userId = typeof req.userId === 'string' 
-      ? new mongoose.Types.ObjectId(req.userId) 
+    const userId = typeof req.userId === "string"
+      ? new mongoose.Types.ObjectId(req.userId)
       : req.userId;
 
     const budget = await Budget.findOneAndUpdate(
-      { _id: req.params.id, userId: userId },
+      { _id: req.params.id, userId },
       req.body,
-      { new: true, runValidators: true }
+      { new: true, runValidators: true },
     );
 
     if (!budget) {
@@ -235,13 +235,13 @@ router.delete("/:id", budgetLimiter, async (req, res) => {
       return sendInternalError(res, "User authentication failed");
     }
 
-    const userId = typeof req.userId === 'string' 
-      ? new mongoose.Types.ObjectId(req.userId) 
+    const userId = typeof req.userId === "string"
+      ? new mongoose.Types.ObjectId(req.userId)
       : req.userId;
 
     const budget = await Budget.findOneAndDelete({
       _id: req.params.id,
-      userId: userId,
+      userId,
     });
 
     if (!budget) {
@@ -263,8 +263,8 @@ router.get("/summary/overview", budgetLimiter, async (req, res) => {
       return sendInternalError(res, "User authentication failed");
     }
 
-    const userId = typeof req.userId === 'string' 
-      ? new mongoose.Types.ObjectId(req.userId) 
+    const userId = typeof req.userId === "string"
+      ? new mongoose.Types.ObjectId(req.userId)
       : req.userId;
 
     const { startDate, endDate } = req.query;
@@ -272,7 +272,7 @@ router.get("/summary/overview", budgetLimiter, async (req, res) => {
     const end = endDate ? new Date(endDate) : new Date();
 
     const budgets = await Budget.find({
-      userId: userId,
+      userId,
       isActive: true,
       startDate: { $lte: end },
       $or: [
@@ -284,7 +284,7 @@ router.get("/summary/overview", budgetLimiter, async (req, res) => {
     const summary = await Promise.all(
       budgets.map(async (budget) => {
         const expenses = await Transaction.find({
-          userId: userId,
+          userId,
           category: budget.category,
           type: "expense",
           date: { $gte: start, $lte: end },
@@ -302,7 +302,7 @@ router.get("/summary/overview", budgetLimiter, async (req, res) => {
           percentage: Math.round(percentage * 100) / 100,
           isOverBudget: actualSpending > budget.amount,
         };
-      })
+      }),
     );
 
     res.json({ summary });

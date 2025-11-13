@@ -80,7 +80,7 @@ router.put("/:id/milestones/:milestoneId", milestoneLimiter, async (req, res) =>
     }
 
     const milestoneIndex = goal.milestones?.findIndex(
-      (m) => m._id?.toString() === req.params.milestoneId
+      (m) => m._id?.toString() === req.params.milestoneId,
     );
 
     if (milestoneIndex === -1 || milestoneIndex === undefined) {
@@ -89,10 +89,10 @@ router.put("/:id/milestones/:milestoneId", milestoneLimiter, async (req, res) =>
 
     // Preserve achievedAt if milestone was already achieved
     const existingMilestone = goal.milestones[milestoneIndex];
-    const achievedAt = existingMilestone.achievedAt;
+    const {achievedAt} = existingMilestone;
 
     Object.assign(goal.milestones[milestoneIndex], req.body);
-    
+
     // Restore achievedAt if it was set
     if (achievedAt && !req.body.achievedAt) {
       goal.milestones[milestoneIndex].achievedAt = achievedAt;
@@ -127,7 +127,7 @@ router.delete("/:id/milestones/:milestoneId", milestoneLimiter, async (req, res)
     }
 
     goal.milestones = goal.milestones?.filter(
-      (m) => m._id?.toString() !== req.params.milestoneId
+      (m) => m._id?.toString() !== req.params.milestoneId,
     ) || [];
 
     await goal.save();

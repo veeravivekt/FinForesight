@@ -95,7 +95,7 @@ export const transactionSchema = Joi.object({
       "Healthcare",
       "Education",
       "Travel",
-      "Other"
+      "Other",
     )
     .required(),
   type: Joi.string().valid("income", "expense", "transfer").required(),
@@ -144,7 +144,7 @@ export const budgetSchema = Joi.object({
       "Healthcare",
       "Education",
       "Travel",
-      "Other"
+      "Other",
     )
     .required(),
   amount: amountSchema,

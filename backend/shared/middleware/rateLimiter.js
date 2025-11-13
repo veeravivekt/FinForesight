@@ -7,7 +7,7 @@ export const createRateLimiter = (limit = 100, window = 60) => {
     // Skip rate limiting in development if DISABLE_RATE_LIMIT is set
     if (process.env.DISABLE_RATE_LIMIT === "true" || process.env.NODE_ENV === "development") {
       // Still log but don't block in development
-      logger.debug(`Rate limiter bypassed in development mode`);
+      logger.debug("Rate limiter bypassed in development mode");
       return next();
     }
 

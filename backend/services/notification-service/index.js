@@ -35,7 +35,7 @@ app.use(cors({
 
 // WebSocket authentication middleware
 io.use((socket, next) => {
-  const token = socket.handshake.auth.token;
+  const {token} = socket.handshake.auth;
   if (!token) {
     return next(new Error("Authentication error"));
   }

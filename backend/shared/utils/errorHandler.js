@@ -42,10 +42,10 @@ export const sendError = (res, statusCode, message, code = null, details = null)
  */
 export const sendValidationError = (res, errors) => {
   // Convert array of errors to single message for consistency
-  const message = Array.isArray(errors) 
-    ? errors.join(", ") 
+  const message = Array.isArray(errors)
+    ? errors.join(", ")
     : errors;
-  
+
   return sendError(res, 400, message, ErrorCodes.VALIDATION_ERROR);
 };
 
@@ -83,10 +83,10 @@ export const sendForbiddenError = (res, message = "Forbidden") => {
  */
 export const sendInternalError = (res, message = "Internal server error") => {
   // In development, include more details
-  const errorMessage = process.env.NODE_ENV === "development" 
-    ? message 
+  const errorMessage = process.env.NODE_ENV === "development"
+    ? message
     : "An unexpected error occurred. Please try again later.";
-  
+
   logger.error("Internal error:", message);
   return sendError(res, 500, errorMessage, ErrorCodes.INTERNAL_ERROR);
 };
@@ -148,7 +148,7 @@ export const asyncHandler = (fn) => {
     Promise.resolve(fn(req, res, next)).catch((error) => {
       // Log error
       logger.error("Route handler error:", error);
-      
+
       // Send standardized error response
       sendInternalError(res, "Internal server error");
     });

@@ -14,7 +14,7 @@ const clearRateLimits = async () => {
 
     // Get all rate limit keys
     const keys = await redisClient.keys("ratelimit:*");
-    
+
     if (keys.length === 0) {
       console.log("No rate limit keys found.");
       await redisClient.quit();
@@ -22,7 +22,7 @@ const clearRateLimits = async () => {
     }
 
     console.log(`Found ${keys.length} rate limit key(s)`);
-    
+
     // Delete all rate limit keys
     for (const key of keys) {
       await redisClient.del(key);

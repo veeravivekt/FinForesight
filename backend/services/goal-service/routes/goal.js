@@ -16,7 +16,7 @@ router.get("/", goalLimiter, async (req, res) => {
   try {
     const { isCompleted } = req.query;
     const query = { userId: req.userId };
-    
+
     if (isCompleted !== undefined) {
       query.isCompleted = isCompleted === "true";
     }
@@ -28,7 +28,7 @@ router.get("/", goalLimiter, async (req, res) => {
     const goalsWithProgress = goals.map((goal) => {
       const progress = goal.getProgress();
       const daysRemaining = goal.getDaysRemaining();
-      
+
       return {
         ...goal.toObject(),
         progress: Math.round(progress * 100) / 100,
@@ -123,7 +123,7 @@ router.put("/:id", goalLimiter, async (req, res) => {
         req.body.isCompleted = true;
         req.body.completedAt = new Date();
       }
-      
+
       // Check milestones and persist achievements
       goal.currentAmount = newAmount;
       const achievedMilestones = goal.checkMilestones();
@@ -131,13 +131,13 @@ router.put("/:id", goalLimiter, async (req, res) => {
         req.body.milestones = goal.milestones;
       }
     }
-    
+
     // Update milestones if provided
     if (req.body.milestones) {
       req.body.milestones = req.body.milestones.map((m) => {
         // Preserve achievedAt if milestone was already achieved
         const existing = goal.milestones?.find(
-          (em) => em.percentage === m.percentage && em.achievedAt
+          (em) => em.percentage === m.percentage && em.achievedAt,
         );
         return {
           ...m,
@@ -149,7 +149,7 @@ router.put("/:id", goalLimiter, async (req, res) => {
     const updatedGoal = await Goal.findOneAndUpdate(
       { _id: req.params.id, userId: req.userId },
       req.body,
-      { new: true, runValidators: true }
+      { new: true, runValidators: true },
     );
 
     // Emit WebSocket event if goal was completed
@@ -241,19 +241,19 @@ router.post("/:id/contribute", goalLimiter, async (req, res) => {
     if (transactionId) {
       await Transaction.findOneAndUpdate(
         { _id: transactionId, userId: req.userId },
-        { goalId: goal._id }
+        { goalId: goal._id },
       );
     }
 
     const updatedGoal = await Goal.findOneAndUpdate(
       { _id: req.params.id, userId: req.userId },
       updateData,
-      { new: true }
+      { new: true },
     );
 
     // Emit WebSocket event for goal milestone
     const newProgress = updatedGoal.getProgress() / 100; // Convert percentage to decimal
-    
+
     if (updatedGoal.isCompleted && !goal.isCompleted) {
       emitGoalEvent(req.userId.toString(), "completed", {
         ...updatedGoal.toObject(),

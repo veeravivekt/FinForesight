@@ -55,7 +55,7 @@ export const invalidatePattern = async (pattern) => {
   try {
     const keys = [];
     let cursor = 0;
-    
+
     do {
       // Redis v4 SCAN API: scan(cursor, { MATCH, COUNT })
       const result = await redisClient.scan(cursor, {
@@ -63,8 +63,8 @@ export const invalidatePattern = async (pattern) => {
         COUNT: 100,
       });
       // Result format: { cursor: number, keys: string[] }
-      cursor = typeof result === 'object' && result.cursor !== undefined ? result.cursor : (Array.isArray(result) ? result[0] : 0);
-      const foundKeys = typeof result === 'object' && Array.isArray(result.keys) ? result.keys : (Array.isArray(result) && result.length > 1 ? result[1] : []);
+      cursor = typeof result === "object" && result.cursor !== undefined ? result.cursor : (Array.isArray(result) ? result[0] : 0);
+      const foundKeys = typeof result === "object" && Array.isArray(result.keys) ? result.keys : (Array.isArray(result) && result.length > 1 ? result[1] : []);
       keys.push(...foundKeys);
     } while (cursor !== 0);
 
@@ -82,7 +82,7 @@ export const invalidatePattern = async (pattern) => {
       }
       logger.debug(`Invalidated ${keys.length} cache keys matching pattern: ${pattern}`);
     }
-    
+
     return keys.length;
   } catch (error) {
     logger.error(`Error invalidating cache pattern ${pattern}:`, error);

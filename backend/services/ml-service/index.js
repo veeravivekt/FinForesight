@@ -55,7 +55,7 @@ app.post("/fraud/detect", authenticate, mlLimiter, async (req, res) => {
       const response = await axios.post(`${PYTHON_ML_SERVICE}/predict/fraud`, {
         features,
       });
-      
+
       const fraudScore = response.data.fraud_score || 0.5;
       const isFraudulent = response.data.is_fraudulent || fraudScore > 0.7;
 
@@ -172,7 +172,7 @@ app.post("/categorize", authenticate, mlLimiter, async (req, res) => {
           break;
         }
       }
-      if (confidence > 0) break;
+      if (confidence > 0) {break;}
     }
 
     // If no pattern match, check user's history
@@ -182,7 +182,7 @@ app.post("/categorize", authenticate, mlLimiter, async (req, res) => {
           const tDesc = t.description.toLowerCase();
           const firstWord = lowerDescription.split(" ")[0];
           return tDesc.includes(firstWord) || firstWord.length > 3 && tDesc.includes(firstWord.substring(0, 3));
-        }
+        },
       );
 
       if (similarTransactions.length > 0) {
@@ -192,7 +192,7 @@ app.post("/categorize", authenticate, mlLimiter, async (req, res) => {
         });
 
         const mostCommonCategory = Object.keys(categoryCounts).reduce((a, b) =>
-          categoryCounts[a] > categoryCounts[b] ? a : b
+          categoryCounts[a] > categoryCounts[b] ? a : b,
         );
 
         suggestedCategory = mostCommonCategory;
@@ -248,7 +248,7 @@ function calculateFraudFeatures(transaction, userTransactions) {
   const recentDeviation = Math.abs(transaction.amount - avgRecentAmount) / (avgRecentAmount || 1);
 
   const sameCategoryRecent = recentTransactions.filter(
-    t => t.category === transaction.category
+    t => t.category === transaction.category,
   ).length;
 
   return {
@@ -284,7 +284,7 @@ function simpleFraudDetection(transaction, userTransactions) {
 
   // Unusual category
   const sameCategoryRecent = userTransactions.slice(0, 10).filter(
-    t => t.category === transaction.category
+    t => t.category === transaction.category,
   ).length;
   if (sameCategoryRecent < 2) {
     score += 0.1;

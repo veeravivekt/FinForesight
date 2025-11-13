@@ -218,13 +218,13 @@ router.post("/login", loginLimiter, async (req, res) => {
         res,
         423,
         `Account is locked. Please try again in ${minutesRemaining} minute(s).`,
-        "ACCOUNT_LOCKED"
+        "ACCOUNT_LOCKED",
       );
     }
 
     // Check password
     const isPasswordValid = await user.comparePassword(password);
-    
+
     // Update last login attempt
     user.lastLoginAttempt = new Date();
 
@@ -240,7 +240,7 @@ router.post("/login", loginLimiter, async (req, res) => {
           res,
           423,
           "Account locked due to too many failed login attempts. Please try again in 30 minutes.",
-          "ACCOUNT_LOCKED"
+          "ACCOUNT_LOCKED",
         );
       }
 
