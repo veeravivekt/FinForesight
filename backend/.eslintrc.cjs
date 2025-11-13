@@ -60,7 +60,13 @@ module.exports = {
   ignorePatterns: ["node_modules/", "dist/", "build/", "*.config.js"],
   overrides: [
     {
-      files: ["**/__tests__/**/*.js", "**/*.test.js", "**/test-helpers.js"],
+      files: [
+        "**/__tests__/**/*.js",
+        "**/*.test.js",
+        "**/*.spec.js",
+        "**/tests/**/*.js",
+        "**/test-helpers.js",
+      ],
       env: {
         jest: true,
       },
