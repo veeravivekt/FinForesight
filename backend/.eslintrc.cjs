@@ -47,7 +47,13 @@ module.exports = {
     // Style (can be auto-fixed by Prettier, but good to have)
     "semi": ["error", "always"],
     "quotes": ["error", "double", { avoidEscape: true }],
-    "comma-dangle": ["error", "es5"],
+    "comma-dangle": ["error", {
+      "arrays": "always-multiline",
+      "objects": "always-multiline",
+      "imports": "always-multiline",
+      "exports": "always-multiline",
+      "functions": "always-multiline"
+    }],
     "no-trailing-spaces": "error",
     "eol-last": ["error", "always"],
   },
