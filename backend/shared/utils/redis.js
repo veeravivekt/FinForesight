@@ -29,7 +29,7 @@ export const setSession = async (userId, refreshToken, expiresIn = 7 * 24 * 60 *
 };
 
 export const getSession = async (userId) => {
-  return await redisClient.get(`session:${userId}`);
+  return redisClient.get(`session:${userId}`);
 };
 
 export const deleteSession = async (userId) => {

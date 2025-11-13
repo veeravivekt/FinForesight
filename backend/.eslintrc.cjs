@@ -58,5 +58,23 @@ module.exports = {
     "eol-last": ["error", "always"],
   },
   ignorePatterns: ["node_modules/", "dist/", "build/", "*.config.js"],
+  overrides: [
+    {
+      files: ["**/__tests__/**/*.js", "**/*.test.js", "**/test-helpers.js"],
+      env: {
+        jest: true,
+      },
+    },
+    {
+      files: ["**/scripts/**/*.js", "**/migrations/**/*.js"],
+      rules: {
+        "no-console": "off",
+        "no-unused-vars": ["warn", {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+        }],
+      },
+    },
+  ],
 };
 
