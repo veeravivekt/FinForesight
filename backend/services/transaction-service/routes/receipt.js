@@ -5,9 +5,9 @@ import fs from "fs";
 import Receipt from "../../../shared/models/Receipt.js";
 import Transaction from "../../../shared/models/Transaction.js";
 import { createRateLimiter } from "../../../shared/middleware/rateLimiter.js";
-import axios from "axios";
 import { sendError, sendNotFoundError, sendValidationError, sendInternalError } from "../../../shared/utils/errorHandler.js";
 import { createServiceLogger } from "../../../shared/utils/logger.js";
+import { extractReceiptData } from "../../../shared/utils/gemini.js";
 
 const router = express.Router();
 const logger = createServiceLogger("transaction-service");
@@ -93,35 +93,66 @@ router.post("/upload", receiptLimiter, upload.single("image"), async (req, res) 
     const filePath = req.file.path;
     const imageUrl = `/uploads/receipts/${req.file.filename}`;
 
-    // Call OCR service (if available)
+    // Extract receipt data using Gemini Vision OCR
     let ocrData = null;
     let extractedData = {
       merchant: null,
       amount: null,
       date: null,
       category: null,
+      subtotal: null,
+      tax: null,
+      tip: null,
+      items: [],
+      payment_method: null,
     };
+    let confidence = 0;
+    let autoCreatedTransaction = null;
 
     try {
-      const ML_SERVICE = process.env.ML_SERVICE_URL || "http://localhost:3003";
-      const PYTHON_ML_SERVICE = process.env.PYTHON_ML_SERVICE_URL || "http://localhost:5000";
+      // Verify file exists
+      if (!fs.existsSync(filePath)) {
+        logger.warn(`Receipt file not found at path: ${filePath}`);
+        throw new Error(`Receipt file not found: ${filePath}`);
+      }
 
-      // Try to call OCR endpoint
-      const ocrResponse = await axios.post(`${PYTHON_ML_SERVICE}/ocr/extract`, {
-        image_path: filePath,
-      }, {
-        timeout: 30000,
-      });
+      // Read file and convert to base64
+      const fileBuffer = fs.readFileSync(filePath);
+      const imageBase64 = fileBuffer.toString("base64");
+      
+      // Determine MIME type from file extension
+      const ext = path.extname(filePath).toLowerCase();
+      let mimeType = "image/jpeg";
+      if (ext === ".png") {
+        mimeType = "image/png";
+      } else if (ext === ".pdf") {
+        mimeType = "application/pdf";
+      }
 
-      ocrData = ocrResponse.data.ocr_data;
+      logger.info(`Extracting receipt data using Gemini Vision for file: ${filePath}`);
+
+      // Extract receipt data using Gemini Vision
+      const result = await extractReceiptData(imageBase64, mimeType);
+      
+      confidence = result.confidence || 0;
       extractedData = {
-        merchant: ocrResponse.data.merchant || null,
-        amount: ocrResponse.data.amount || null,
-        date: ocrResponse.data.date || null,
-        category: ocrResponse.data.category || null,
+        merchant: result.merchant || null,
+        amount: result.amount || null,
+        date: result.date || null,
+        category: result.category || null,
+        subtotal: result.subtotal || null,
+        tax: result.tax || null,
+        tip: result.tip || null,
+        items: result.items || [],
+        payment_method: result.payment_method || null,
+      };
+      
+      ocrData = {
+        extractedData,
+        confidence,
       };
     } catch (error) {
-      logger.warn("OCR service not available, creating receipt without OCR data");
+      logger.warn(`OCR extraction failed: ${error.message}, creating receipt without OCR data`);
     }
 
     const receipt = new Receipt({
@@ -132,16 +163,69 @@ router.post("/upload", receiptLimiter, upload.single("image"), async (req, res) 
       amount: extractedData.amount,
       date: extractedData.date ? new Date(extractedData.date) : null,
       category: extractedData.category,
-      ocrData,
-      isProcessed: !!ocrData,
+      ocrData: {
+        ...ocrData,
+        extractedData,
+      },
+      isProcessed: !!ocrData && confidence > 0.5,
     });
 
     await receipt.save();
 
+    // Auto-create transaction if confidence is high (>0.9) and we have required data
+    if (confidence > 0.9 && extractedData.amount && extractedData.merchant) {
+      try {
+        // Get user's default account (first checking account)
+        const Account = (await import("../../../shared/models/Account.js")).default;
+        const defaultAccount = await Account.findOne({
+          userId: req.userId,
+          type: "checking",
+          isArchived: false,
+        });
+
+        if (defaultAccount) {
+          autoCreatedTransaction = new Transaction({
+            userId: req.userId,
+            accountId: defaultAccount._id,
+            amount: -Math.abs(extractedData.amount), // Negative for expense
+            description: extractedData.merchant,
+            category: extractedData.category || "Other",
+            type: "expense",
+            date: extractedData.date ? new Date(extractedData.date) : new Date(),
+            merchant: {
+              name: extractedData.merchant,
+            },
+            receiptId: receipt._id,
+            autoCategorized: true,
+            categorizationConfidence: confidence,
+          });
+
+          await autoCreatedTransaction.save();
+
+          // Link receipt to transaction
+          receipt.transactionId = autoCreatedTransaction._id;
+          receipt.isProcessed = true;
+          await receipt.save();
+        }
+      } catch (error) {
+        logger.warn("Failed to auto-create transaction:", error.message);
+      }
+    }
+
     res.status(201).json({
       receipt,
       extractedData,
-      message: ocrData ? "Receipt processed successfully" : "Receipt uploaded successfully (OCR processing pending)",
+      autoCreatedTransaction: autoCreatedTransaction ? {
+        id: autoCreatedTransaction._id,
+        amount: autoCreatedTransaction.amount,
+        description: autoCreatedTransaction.description,
+      } : null,
+      confidence,
+      message: ocrData
+        ? confidence > 0.9
+          ? "Receipt processed and transaction created automatically"
+          : "Receipt processed successfully"
+        : "Receipt uploaded successfully (OCR processing pending)",
     });
   } catch (error) {
     logger.error("Upload receipt error:", error);
@@ -260,6 +344,121 @@ router.post("/categorize", receiptLimiter, async (req, res) => {
     });
   } catch (error) {
     logger.error("Categorize error:", error);
+    sendInternalError(res);
+  }
+});
+
+// Re-process receipt with Gemini Vision
+router.post("/:id/process", receiptLimiter, async (req, res) => {
+  try {
+    const receipt = await Receipt.findOne({
+      _id: req.params.id,
+      userId: req.userId,
+    });
+
+    if (!receipt) {
+      return sendNotFoundError(res, "Receipt");
+    }
+
+    const filePath = path.join(uploadDir, receipt.imageKey);
+    if (!fs.existsSync(filePath)) {
+      return sendError(res, 404, "Receipt image file not found", "NOT_FOUND");
+    }
+
+    // Re-extract receipt data using Gemini Vision OCR
+    let ocrData = null;
+    let extractedData = {
+      merchant: null,
+      amount: null,
+      date: null,
+      category: null,
+      subtotal: null,
+      tax: null,
+      tip: null,
+      items: [],
+      payment_method: null,
+    };
+    let confidence = 0;
+
+    try {
+      // Read file and convert to base64
+      const fileBuffer = fs.readFileSync(filePath);
+      const imageBase64 = fileBuffer.toString("base64");
+      
+      // Determine MIME type from file extension
+      const ext = path.extname(filePath).toLowerCase();
+      let mimeType = "image/jpeg";
+      if (ext === ".png") {
+        mimeType = "image/png";
+      } else if (ext === ".pdf") {
+        mimeType = "application/pdf";
+      }
+
+      logger.info(`Re-extracting receipt data using Gemini Vision for file: ${filePath}`);
+
+      // Extract receipt data using Gemini Vision
+      const result = await extractReceiptData(imageBase64, mimeType);
+      
+      confidence = result.confidence || 0;
+      extractedData = {
+        merchant: result.merchant || null,
+        amount: result.amount || null,
+        date: result.date || null,
+        category: result.category || null,
+        subtotal: result.subtotal || null,
+        tax: result.tax || null,
+        tip: result.tip || null,
+        items: result.items || [],
+        payment_method: result.payment_method || null,
+      };
+      
+      ocrData = {
+        extractedData,
+        confidence,
+      };
+    } catch (error) {
+      logger.warn(`OCR re-processing failed: ${error.message}, returning receipt without OCR update`);
+      return res.json({
+        receipt,
+        extractedData: receipt.ocrData?.extractedData || null,
+        confidence: receipt.ocrData?.confidence || 0,
+        message: "Receipt re-processing failed. Receipt data unchanged.",
+      });
+    }
+
+    // Update receipt with new OCR data
+    receipt.merchant = extractedData.merchant || receipt.merchant;
+    receipt.amount = extractedData.amount || receipt.amount;
+    receipt.date = extractedData.date ? new Date(extractedData.date) : receipt.date;
+    receipt.category = extractedData.category || receipt.category;
+    receipt.ocrData = {
+      ...ocrData,
+      extractedData,
+    };
+    receipt.isProcessed = confidence > 0.5;
+
+    await receipt.save();
+
+    // Update linked transaction if exists
+    if (receipt.transactionId) {
+      const transaction = await Transaction.findById(receipt.transactionId);
+      if (transaction && transaction.userId.toString() === req.userId) {
+        transaction.amount = extractedData.amount ? -Math.abs(extractedData.amount) : transaction.amount;
+        transaction.description = extractedData.merchant || transaction.description;
+        transaction.category = extractedData.category || transaction.category;
+        transaction.date = extractedData.date ? new Date(extractedData.date) : transaction.date;
+        await transaction.save();
+      }
+    }
+
+    res.json({
+      receipt,
+      extractedData,
+      confidence,
+      message: "Receipt re-processed successfully",
+    });
+  } catch (error) {
+    logger.error("Re-process receipt error:", error);
     sendInternalError(res);
   }
 });

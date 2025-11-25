@@ -48,7 +48,7 @@ export async function emitTransactionEvent(userId, eventType, transaction) {
 }
 
 /**
- * Emit goal milestone events
+ * Emit goal events
  */
 export async function emitGoalEvent(userId, eventType, goal) {
   await emitWebSocketEvent(userId, `goal:${eventType}`, {
@@ -73,5 +73,6 @@ export async function emitBudgetEvent(userId, eventType, budget) {
     isOverBudget: budget.isOverBudget,
   });
 }
+
 
 

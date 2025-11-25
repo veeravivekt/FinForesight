@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Download, TrendingUp, TrendingDown, DollarSign, FileText, FileSpreadsheet, File } from "lucide-react";
+import { Download, TrendingUp, TrendingDown, DollarSign, FileText } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
@@ -53,7 +53,7 @@ export default function ReportsPage() {
   const reportData = reportType === "monthly" ? monthlyData : yearlyData;
 
   // Handle export function
-  const handleExport = async (format: "csv" | "pdf" | "excel" | "json") => {
+  const handleExport = async (format: "csv" | "json") => {
     try {
       const startDate = reportType === "monthly"
         ? startOfMonth(new Date(selectedYear, selectedMonth - 1))
@@ -78,7 +78,7 @@ export default function ReportsPage() {
       const link = document.createElement("a");
       link.href = downloadUrl;
       
-      const extension = format === "pdf" ? "pdf" : format === "excel" ? "xlsx" : format === "json" ? "json" : "csv";
+      const extension = format === "json" ? "json" : "csv";
       link.download = `transactions-${reportType}-${selectedYear}${reportType === "monthly" ? `-${selectedMonth}` : ""}.${extension}`;
       document.body.appendChild(link);
       link.click();
@@ -189,14 +189,6 @@ export default function ReportsPage() {
           <Button onClick={() => handleExport("csv")} variant="outline">
             <Download className="mr-2 h-4 w-4" />
             CSV
-          </Button>
-          <Button onClick={() => handleExport("excel")} variant="outline">
-            <FileSpreadsheet className="mr-2 h-4 w-4" />
-            Excel
-          </Button>
-          <Button onClick={() => handleExport("pdf")} variant="outline">
-            <File className="mr-2 h-4 w-4" />
-            PDF
           </Button>
           <Button onClick={() => handleExport("json")} variant="outline">
             <FileText className="mr-2 h-4 w-4" />

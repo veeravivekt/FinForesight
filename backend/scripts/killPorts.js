@@ -5,7 +5,7 @@
  * Usage: node scripts/killPorts.js
  */
 
-const { execSync } = require("child_process");
+import { execSync } from "child_process";
 
 const ports = [3000, 3002, 3003, 3004, 3005, 3006, 3007, 3008];
 
@@ -34,6 +34,7 @@ ports.forEach(port => {
 });
 
 console.log("\nDone! You can now start your services.");
+
 
 
 

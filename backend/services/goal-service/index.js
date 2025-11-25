@@ -4,7 +4,6 @@ import dotenv from "dotenv";
 import helmet from "helmet";
 import morgan from "morgan";
 import goalRoutes from "./routes/goal.js";
-import milestoneRoutes from "./routes/milestones.js";
 import { authenticate } from "../../shared/middleware/auth.js";
 import { connectDB } from "../../shared/utils/database.js";
 import { createServiceLogger } from "../../shared/utils/logger.js";
@@ -27,7 +26,6 @@ app.use(cors({
 
 // Routes
 app.use("/goals", authenticate, goalRoutes);
-app.use("/goals", authenticate, milestoneRoutes);
 
 // Health check
 app.get("/health", (req, res) => {

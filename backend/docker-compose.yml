@@ -61,18 +61,6 @@ services:
     networks:
       - finforesight-network
 
-  ml-service-python:
-    build:
-      context: services/ml-service
-      dockerfile: Dockerfile.python
-    container_name: finforesight-ml-python
-    ports:
-      - "5000:5000"
-    volumes:
-      - ml_models:/app/models
-    networks:
-      - finforesight-network
-
   ml-service:
     build:
       context: .
@@ -82,12 +70,11 @@ services:
       - "3003:3003"
     environment:
       - MONGO_URL=mongodb://mongodb:27017/finforesight
-      - PYTHON_ML_SERVICE_URL=http://ml-service-python:5000
       - ML_SERVICE_PORT=3003
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:5173}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
     depends_on:
       - mongodb
-      - ml-service-python
     networks:
       - finforesight-network
 
@@ -129,7 +116,6 @@ services:
 volumes:
   mongodb_data:
   redis_data:
-  ml_models:
 
 networks:
   finforesight-network:

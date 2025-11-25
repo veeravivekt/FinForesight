@@ -7,6 +7,7 @@ import { Wallet, TrendingUp, TrendingDown, Target, ArrowUp, ArrowDown, CreditCar
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { format, startOfMonth, endOfMonth, subMonths } from "date-fns";
 import Link from "next/link";
 
@@ -194,6 +195,7 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
 
       {/* Quick Actions */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

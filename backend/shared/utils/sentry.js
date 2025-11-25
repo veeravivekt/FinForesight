@@ -1,5 +1,4 @@
 import * as Sentry from "@sentry/node";
-import { nodeProfilingIntegration } from "@sentry/profiling-node";
 
 /**
  * Initialize Sentry for error tracking
@@ -11,7 +10,9 @@ export const initSentry = (options = {}) => {
     environment = process.env.NODE_ENV || "development",
     release = process.env.SENTRY_RELEASE,
     tracesSampleRate = environment === "production" ? 0.1 : 1.0,
-    profilesSampleRate = environment === "production" ? 0.1 : 1.0,
+    // profilesSampleRate removed - only needed if profiling integration is installed
+    // To enable profiling, install: npm install @sentry/profiling-node
+    // Then uncomment: profilesSampleRate = environment === "production" ? 0.1 : 1.0,
   } = options;
 
   if (!dsn) {
@@ -19,17 +20,23 @@ export const initSentry = (options = {}) => {
     return;
   }
 
+  const integrations = [
+    Sentry.httpIntegration(),
+    Sentry.expressIntegration({ app: undefined }), // Will be set when app is available
+  ];
+
+  // Note: Profiling integration removed as @sentry/profiling-node is optional
+  // To enable profiling, install: npm install @sentry/profiling-node
+  // Then uncomment and add: integrations.push(nodeProfilingIntegration());
+
   Sentry.init({
     dsn,
     environment,
     release,
-    integrations: [
-      nodeProfilingIntegration(),
-      Sentry.httpIntegration(),
-      Sentry.expressIntegration({ app: undefined }), // Will be set when app is available
-    ],
+    integrations,
     tracesSampleRate,
-    profilesSampleRate,
+    // profilesSampleRate only works with profiling integration installed
+    // profilesSampleRate,
     beforeSend(event, hint) {
       // Filter out sensitive data
       if (event.request) {

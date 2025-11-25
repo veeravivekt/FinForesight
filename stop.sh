@@ -23,6 +23,7 @@ if [ -d "$LOGS_DIR" ]; then
             rm "$pidfile"
         fi
     done
+    
 else
     echo -e "${RED}No logs directory found. Services may not be running.${NC}"
 fi

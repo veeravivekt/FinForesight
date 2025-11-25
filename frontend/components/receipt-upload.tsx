@@ -78,7 +78,10 @@ export default function ReceiptUpload({ onSuccess, onCancel }: ReceiptUploadProp
 
       const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
       
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000"}/api/receipts/upload`, {
+      // Use the same API base URL pattern as the rest of the app
+      const API_VERSION = process.env.NEXT_PUBLIC_API_VERSION || "v1";
+      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || `http://localhost:3000/api/${API_VERSION}`;
+      const response = await fetch(`${API_BASE_URL}/receipts/upload`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -92,14 +95,18 @@ export default function ReceiptUpload({ onSuccess, onCancel }: ReceiptUploadProp
       }
 
       const data = await response.json();
-      setExtractedData(data.extractedData);
+      setExtractedData({
+        ...data.extractedData,
+        autoCreatedTransaction: data.autoCreatedTransaction,
+        confidence: data.confidence,
+      });
       setSuccess(true);
 
-      // Auto-close after 2 seconds if data was extracted
+      // Auto-close after 3 seconds if data was extracted
       if (data.extractedData && (data.extractedData.merchant || data.extractedData.amount)) {
         setTimeout(() => {
           onSuccess();
-        }, 2000);
+        }, 3000);
       }
     } catch (err: any) {
       setError(err.message || "Failed to upload receipt");
@@ -117,18 +124,37 @@ export default function ReceiptUpload({ onSuccess, onCancel }: ReceiptUploadProp
       )}
 
       {success && (
-        <Alert className="bg-green-50 border-green-200">
-          <CheckCircle2 className="h-4 w-4 text-green-600" />
-          <AlertDescription className="text-green-800">
-            Receipt uploaded successfully!
-            {extractedData && (extractedData.merchant || extractedData.amount) && (
-              <div className="mt-2 text-sm">
-                <p>Extracted data:</p>
-                {extractedData.merchant && <p>Merchant: {extractedData.merchant}</p>}
-                {extractedData.amount && <p>Amount: ${extractedData.amount.toFixed(2)}</p>}
-                {extractedData.category && <p>Category: {extractedData.category}</p>}
-              </div>
-            )}
+        <Alert className="bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800">
+          <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+          <AlertDescription className="text-green-800 dark:text-green-200">
+            <div className="space-y-2">
+              <p className="font-semibold">
+                {extractedData?.autoCreatedTransaction
+                  ? "Receipt processed and transaction created automatically!"
+                  : extractedData?.confidence && extractedData.confidence > 0.9
+                  ? "Receipt processed successfully!"
+                  : "Receipt uploaded successfully!"}
+              </p>
+              {extractedData && (extractedData.merchant || extractedData.amount) && (
+                <div className="mt-2 text-sm space-y-1">
+                  {extractedData.merchant && <p>Merchant: {extractedData.merchant}</p>}
+                  {extractedData.amount && <p>Amount: ${extractedData.amount.toFixed(2)}</p>}
+                  {extractedData.category && <p>Category: {extractedData.category}</p>}
+                  {extractedData.confidence && (
+                    <p className="text-xs opacity-75">
+                      Confidence: {(extractedData.confidence * 100).toFixed(0)}%
+                    </p>
+                  )}
+                  {extractedData.autoCreatedTransaction && (
+                    <div className="mt-2 p-2 bg-green-100 dark:bg-green-900/30 rounded text-xs">
+                      <p className="font-semibold">Transaction Created:</p>
+                      <p>{extractedData.autoCreatedTransaction.description}</p>
+                      <p>${Math.abs(extractedData.autoCreatedTransaction.amount).toFixed(2)}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </AlertDescription>
         </Alert>
       )}

@@ -1,223 +1,180 @@
 # FinForesight
 
-A modern financial management application built with Next.js, Express, and microservices architecture. FinForesight helps users manage budgets, track financial goals, handle multiple accounts, and gain actionable insights into their finances.
+<div align="center">
+
+**A modern, intelligent financial management platform built with microservices architecture**
+
+[![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://opensource.org/licenses/ISC)
+[![Node.js Version](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen.svg)](https://nodejs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue.svg)](https://www.typescriptlang.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-16.0-black.svg)](https://nextjs.org/)
+
+[Features](#features) • [Architecture](#architecture) • [Getting Started](#getting-started) • [API Docs](#api-documentation)
+
+</div>
+
+---
+
+## Overview
+
+FinForesight is a comprehensive financial management application with AI-powered insights, real-time tracking, and predictive analytics. Built with microservices architecture for scalability and maintainability.
+
+---
 
 ## Features
 
-### Core Functionality
-
-- **Authentication & Security** - JWT-based authentication with encrypted sessions
-- **Multi-Account Management** - Support for checking, savings, credit cards, cash, and investment accounts
-- **Budget Tracking** - Category-based budgets with spending alerts and notifications
+- **Multi-Account Management** - Checking, savings, credit cards, cash, and investment accounts
+- **Budget Tracking** - Category-based budgets with real-time spending alerts
 - **Financial Goals** - Set and track savings goals with progress visualization
-- **Transaction Management** - Full CRUD operations with intelligent categorization
+
+![Financial Goals](./images/FinForesightGoals.png)
+
+- **Transaction Management** - Full CRUD with AI-powered categorization
+- **Receipt OCR** - Upload receipts with Google Gemini Vision API for automatic data extraction
+
+![Receipt OCR Dataflow](./images/ReceiptOCRDataflow.png)
 - **Recurring Bills** - Automated bill tracking and payment reminders
-- **Receipt Management** - Upload receipts with OCR capabilities for expense tracking
-- **Financial Reports** - Monthly and yearly summaries with export functionality
-- **Smart Categorization** - Machine learning-based automatic transaction categorization
-- **Interactive Dashboard** - Comprehensive financial overview with real-time updates
+- **AI Financial Assistant** - Natural language queries about your finances using Gemini Flash
+- **Cash Flow Forecasting** - Predictive balance projections and low balance warnings
+- **Financial Reports** - Monthly/yearly summaries with CSV, PDF, Excel, JSON exports
+- **Real-Time Notifications** - WebSocket-based alerts for budgets, goals, and system updates
+
+---
 
 ## Architecture
 
-### Microservices
-
-The application follows a microservices architecture with the following services:
+### Microservices Architecture
 
 ```
-┌─────────────┐
-│   Frontend  │ (Next.js, Port 3001)
-│  (Next.js)  │
-└──────┬──────┘
-       │ HTTP/WebSocket
-       │
-┌──────▼──────────────────────────────────────────┐
-│           API Gateway (Port 3000)               │
-│  Routes requests to appropriate microservices   │
-└───┬───┬───┬───┬───┬───┬───┬───┬────────────────┘
-    │   │   │   │   │   │   │   │
-    │   │   │   │   │   │   │   └──► Notification Service (Port 3004)
-    │   │   │   │   │   │   │        - WebSocket server
-    │   │   │   │   │   │   │        - Real-time notifications
-    │   │   │   │   │   │   │
-    │   │   │   │   │   │   └──► ML Service (Port 3003)
-    │   │   │   │   │   │         - Smart categorization
-    │   │   │   │   │   │         - Fraud detection
-    │   │   │   │   │   │         └─► Python ML Service (Port 5000)
-    │   │   │   │   │   │
-    │   │   │   │   │   └──► Goal Service (Port 3007)
-    │   │   │   │   │         - Financial goals management
-    │   │   │   │   │
-    │   │   │   │   └──► Budget Service (Port 3006)
-    │   │   │   │         - Budget tracking
-    │   │   │   │         - Spending alerts
-    │   │   │   │
-    │   │   │   └──► Account Service (Port 3005)
-    │   │   │         - Multi-account management
-    │   │   │
-    │   │   └──► Transaction Service (Port 3002)
-    │   │         - Transaction CRUD
-    │   │         - Reports & exports
-    │   │         - Recurring transactions
-    │   │
-    │   └──► Auth Service (Port 3008)
-    │         - User authentication
-    │         - JWT token management
-    │         - Session management
-    │
-    └──► Shared Infrastructure
-          ├── MongoDB (Port 27017)
-          │    └── Data persistence
-          │
-          └── Redis (Port 6379)
-               ├── Session storage
-               └── Caching layer
+Frontend (Next.js) → API Gateway (3000)
+    ├── Auth Service (3008) - Authentication & JWT
+    ├── Transaction Service (3002) - Transactions, receipts, reports
+    ├── Account Service (3005) - Multi-account management
+    ├── Budget Service (3006) - Budget tracking & alerts
+    ├── Goal Service (3007) - Financial goals
+    ├── ML Service (3003) - AI assistant, forecasting, categorization
+    └── Notification Service (3004) - WebSocket notifications
+
+Infrastructure:
+    ├── MongoDB (27017) - Primary database
+    └── Redis (6379) - Sessions, caching, rate limiting
 ```
 
-**Service Details:**
+### Design Decisions
 
-1. **Auth Service** (Port 3008) - User authentication and session management
-2. **Transaction Service** (Port 3002) - Transaction CRUD operations, reports, exports
-3. **Account Service** (Port 3005) - Multi-account management
-4. **Budget Service** (Port 3006) - Budget tracking and alerts
-5. **Goal Service** (Port 3007) - Financial goals management
-6. **ML Service** (Port 3003) - Smart categorization and insights
-7. **Notification Service** (Port 3004) - Real-time updates via WebSocket
-8. **API Gateway** (Port 3000) - Routes requests to appropriate services
+- **Microservices**: Independent scaling, deployment, and fault isolation
+- **API Gateway**: Single entry point with centralized auth, rate limiting, and routing
+- **JWT Authentication**: Short-lived access tokens (15m) + refresh tokens (7d) with rotation
+- **Shared Infrastructure**: Common models, middleware, and utilities in `backend/shared/`
+- **Security**: Rate limiting, CSRF protection, input sanitization, account lockout after 5 failed attempts
 
-### Infrastructure
-
-- **MongoDB** (Port 27017) - Primary database for data persistence
-- **Redis** (Port 6379) - Session storage and caching layer
-- **Python ML Service** (Port 5000) - Machine learning model inference
+---
 
 ## Tech Stack
 
-### Frontend
+**Frontend**: Next.js 16, React 19, TypeScript, Tailwind CSS, shadcn/ui, Zustand, React Query, Socket.IO
 
-- **Next.js 14+** (App Router) - React framework for server-side rendering
-- **TypeScript** - Type-safe development
-- **Tailwind CSS** - Utility-first CSS framework
-- **shadcn/ui** - High-quality UI component library
-- **Zustand** - Lightweight state management
-- **React Query** - Server state management and data fetching
-- **Lucide React** - Icon library
+**Backend**: Node.js 18+, Express.js, MongoDB, Mongoose, Redis, JWT, Socket.IO, Winston, Sentry
 
-### Backend
+**AI/ML**: Google Gemini API (Flash for assistant, Vision for OCR)
 
-- **Express.js** - Web application framework
-- **MongoDB** - NoSQL database
-- **Redis** - In-memory data store for caching and sessions
-- **JWT** - JSON Web Tokens for authentication
-- **Microservices Architecture** - Scalable and maintainable service-oriented design
+**Infrastructure**: Docker, Docker Compose
+
+---
 
 ## Prerequisites
 
-Before you begin, ensure you have the following installed:
+- **Node.js** 18.0.0 or higher
+- **MongoDB** 7.0 or higher
+- **Redis** 7.0 or higher
+- **Google Gemini API Key** ([Get API Key](https://makersuite.google.com/app/apikey))
 
-- Node.js 18 or higher
-- MongoDB (local or remote instance)
-- Redis server
-- Python 3.11 or higher (required for ML service)
-- npm or yarn package manager
+---
 
 ## Getting Started
 
-### Backend Setup
+### Quick Start
 
-1. Navigate to the backend directory:
-```bash
-cd backend
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/yourusername/FinForesight.git
+   cd FinForesight
+   ```
+
+2. **Start infrastructure services**
+   ```bash
+   # MongoDB (macOS)
+   brew services start mongodb/brew/mongodb-community@7.0
+   
+   # Redis (macOS)
+   brew services start redis
+   
+   # Or use Docker Compose
+   cd backend && docker-compose up -d mongodb redis
+   ```
+
+3. **Set up backend**
+   ```bash
+   cd backend
+   npm install
+   cp .env.example .env
+   # Edit .env and add your GEMINI_API_KEY
+   ```
+
+4. **Set up frontend**
+   ```bash
+   cd frontend
+   npm install
+   cp .env.local.example .env.local
+   ```
+
+5. **Start all services**
+   ```bash
+   # From project root
+   ./start.sh
+   ```
+
+6. **Access the application**
+   - Frontend: http://localhost:3001
+   - API Gateway: http://localhost:3000
+   - API Docs: http://localhost:3000/api-docs
+
+### Environment Variables
+
+**Backend** (`backend/.env`):
+```env
+MONGO_URL=mongodb://localhost:27017/finforesight
+REDIS_URL=redis://localhost:6379
+JWT_SECRET=your-secret-key-here
+JWT_REFRESH_SECRET=your-refresh-secret-key-here
+GEMINI_API_KEY=your-gemini-api-key-here
+FRONTEND_URL=http://localhost:3001
+NODE_ENV=development
+DISABLE_RATE_LIMIT=true
 ```
 
-2. Install dependencies:
-```bash
-npm install
+**Frontend** (`frontend/.env.local`):
+```env
+NEXT_PUBLIC_API_URL=http://localhost:3000
+NEXT_PUBLIC_WS_URL=http://localhost:3004
 ```
-
-3. Create a `.env` file in the backend directory:
-```bash
-# Copy the example file
-cp .env.example .env
-```
-
-   Then edit `.env` and update the values as needed. See `backend/.env.example` for all available configuration options and descriptions.
-
-4. Start MongoDB and Redis services:
-```bash
-# MongoDB (macOS)
-brew services start mongodb/brew/mongodb-community@7.0
-
-# Redis (macOS)
-brew services start redis
-```
-
-5. Start all microservices. Each service should run in a separate terminal:
-```bash
-# Terminal 1 - Auth Service
-npm run dev:auth
-
-# Terminal 2 - Transaction Service
-npm run dev:transaction
-
-# Terminal 3 - Account Service
-npm run dev:account
-
-# Terminal 4 - Budget Service
-npm run dev:budget
-
-# Terminal 5 - Goal Service
-npm run dev:goal
-
-# Terminal 6 - ML Service
-npm run dev:ml
-
-# Terminal 7 - Notification Service
-npm run dev:notification
-
-# Terminal 8 - API Gateway
-npm run dev:gateway
-```
-
-### Frontend Setup
-
-1. Navigate to the frontend directory:
-```bash
-cd frontend
-```
-
-2. Install dependencies:
-```bash
-npm install
-```
-
-3. Create a `.env.local` file in the frontend directory:
-```bash
-# Copy the example file
-cp .env.local.example .env.local
-```
-
-   Then edit `.env.local` and update the values as needed. See `frontend/.env.local.example` for all available configuration options.
-
-4. Start the development server:
-```bash
-npm run dev
-```
-
-5. Open your browser and navigate to `http://localhost:3001`
 
 ### Test Credentials
 
-For testing purposes, you can use the following credentials:
-
 - **Email**: `test@finforesight.com`
 - **Password**: `test123`
+
+Or create a test user: `cd backend && npm run create-test-user`
+
+---
 
 ## Project Structure
 
 ```
 FinForesight/
 ├── backend/
-│   ├── services/
+│   ├── gateway/              # API Gateway
+│   ├── services/             # 8 microservices
 │   │   ├── auth-service/
 │   │   ├── transaction-service/
 │   │   ├── account-service/
@@ -225,140 +182,94 @@ FinForesight/
 │   │   ├── goal-service/
 │   │   ├── ml-service/
 │   │   └── notification-service/
-│   ├── shared/
-│   │   ├── models/
-│   │   ├── middleware/
-│   │   └── utils/
-│   └── gateway/
-│
-└── frontend/
-    ├── app/
-    │   ├── (auth)/
-    │   ├── (dashboard)/
-    │   └── layout.tsx
-    ├── components/
-    ├── lib/
-    └── store/
+│   ├── shared/              # Shared models, middleware, utils
+│   └── scripts/             # Utility scripts
+├── frontend/
+│   ├── app/                 # Next.js App Router
+│   ├── components/         # React components
+│   ├── lib/                # API client, utilities
+│   └── store/              # Zustand stores
+└── images/                 # Documentation images
 ```
+
+---
 
 ## API Documentation
 
-### Authentication Endpoints
+Interactive Swagger docs: http://localhost:3000/api-docs
 
-- `POST /api/auth/register` - Register a new user account
-- `POST /api/auth/login` - Authenticate and login user
-- `POST /api/auth/logout` - Logout current user session
-- `POST /api/auth/refresh` - Refresh access token
-- `GET /api/auth/me` - Get current authenticated user information
+### Key Endpoints
 
-### Account Endpoints
+**Authentication**: `/api/auth/login`, `/api/auth/register`, `/api/auth/refresh`
 
-- `GET /api/accounts` - Retrieve all user accounts
-- `GET /api/accounts/:id` - Get specific account by ID
-- `POST /api/accounts` - Create a new account
-- `PUT /api/accounts/:id` - Update account information
-- `DELETE /api/accounts/:id` - Archive an account
-- `POST /api/accounts/transfer` - Transfer funds between accounts
+**Accounts**: `/api/accounts` (GET, POST, PUT, DELETE), `/api/accounts/transfer`
 
-### Transaction Endpoints
+**Transactions**: `/api/transactions` (CRUD), `/api/transactions/export/{csv|pdf|excel|json}`
 
-- `GET /api/transactions` - Get paginated list of transactions
-- `GET /api/transactions/:id` - Get specific transaction by ID
-- `POST /api/transactions` - Create a new transaction
-- `PUT /api/transactions/:id` - Update transaction details
-- `DELETE /api/transactions/:id` - Delete a transaction
+**Receipts**: `/api/receipts` (POST upload), `/api/receipts/process/:id` (re-process OCR)
 
-### Budget Endpoints
+**Budgets**: `/api/budgets` (CRUD), `/api/budgets/summary/overview`
 
-- `GET /api/budgets` - Retrieve all budgets
-- `GET /api/budgets/:id` - Get specific budget by ID
-- `POST /api/budgets` - Create a new budget
-- `PUT /api/budgets/:id` - Update budget information
-- `DELETE /api/budgets/:id` - Delete a budget
-- `GET /api/budgets/summary/overview` - Get budget summary overview
+**Goals**: `/api/goals` (CRUD), `/api/goals/:id/contribute`
 
-### Goal Endpoints
+**AI/ML**: `/api/ml/ai/chat`, `/api/ml/cashflow/forecast`, `/api/ml/categorize`
 
-- `GET /api/goals` - Retrieve all financial goals
-- `GET /api/goals/:id` - Get specific goal by ID
-- `POST /api/goals` - Create a new financial goal
-- `PUT /api/goals/:id` - Update goal information
-- `DELETE /api/goals/:id` - Delete a goal
-- `POST /api/goals/:id/contribute` - Add contribution to a goal
+All endpoints require `Authorization: Bearer <token>` header except auth endpoints.
 
-## Roadmap
+---
 
-- [x] Phase 1: Foundation & Setup
-- [x] Phase 2: Accounts & Transactions UI
-- [x] Phase 3: Budget System UI
-- [x] Phase 4: Goals & Bills UI
-- [x] Phase 5: Smart Features (Receipts, Categorization)
-- [ ] Phase 6: Reports & Export
+## Security Features
 
-## Contributing
+- **JWT Authentication** with token rotation and family tracking
+- **Rate Limiting** (configurable, disabled in development)
+- **Account Lockout** after 5 failed login attempts (30min lockout)
+- **Input Validation** with Joi schemas
+- **XSS Protection** via DOMPurify
+- **CSRF Protection** with tokens
+- **Security Headers** via Helmet middleware
+- **Password Hashing** with bcrypt
 
-Contributions are welcome! Please follow these steps:
+---
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+## Development
 
-## License
+### Available Scripts
 
-This project is licensed under the ISC License.
+**Backend**:
+```bash
+npm run dev:auth          # Start auth service
+npm run dev:transaction   # Start transaction service
+npm run dev:account       # Start account service
+npm run dev:budget        # Start budget service
+npm run dev:goal          # Start goal service
+npm run dev:ml            # Start ML service
+npm run dev:notification  # Start notification service
+npm run dev:gateway       # Start API gateway
+npm test                  # Run tests
+npm run lint              # Lint code
+npm run seed              # Seed test data
+```
+
+**Frontend**:
+```bash
+npm run dev               # Start dev server
+npm test                  # Run tests
+npm run lint              # Lint code
+```
+
+---
 
 ## Troubleshooting
 
-### Common Issues
+**Services won't start**: Check MongoDB (`mongosh`) and Redis (`redis-cli ping`) are running, verify ports 3000-3008 are free, check `.env` file exists.
 
-#### Services won't start
-- **Check MongoDB**: Ensure MongoDB is running (`mongosh` should connect)
-- **Check Redis**: Ensure Redis is running (`redis-cli ping` should return "PONG")
-- **Check Ports**: Ensure ports 3000-3008 and 5000 are not in use
-- **Check Environment Variables**: Verify `.env` file exists and has correct values
+**Database errors**: Verify `MONGO_URL` in `.env`, ensure MongoDB is running.
 
-#### Database Connection Errors
-- Verify `MONGO_URL` is correct in `.env`
-- Check MongoDB is accessible: `mongosh "mongodb://localhost:27017/finforesight"`
-- Ensure MongoDB service is running: `brew services list` (macOS)
+**CORS errors**: Check `FRONTEND_URL` in backend `.env` matches frontend URL, verify `NEXT_PUBLIC_API_URL` in frontend `.env.local`.
 
-#### Redis Connection Errors
-- Verify `REDIS_URL` is correct in `.env`
-- Check Redis is accessible: `redis-cli ping`
-- Ensure Redis service is running: `brew services list` (macOS)
+**AI features not working**: Ensure `GEMINI_API_KEY` is set in backend `.env`, check ML service logs.
 
-#### CORS Errors
-- Verify `FRONTEND_URL` in backend `.env` matches frontend URL
-- Check `NEXT_PUBLIC_API_URL` in frontend `.env.local` matches gateway URL
-- Ensure both frontend and backend are running
+**Rate limiting**: Set `DISABLE_RATE_LIMIT=true` or `NODE_ENV=development` in `.env` for development.
 
-#### Authentication Issues
-- Verify JWT secrets are set in `.env`
-- Check token expiration settings (`JWT_EXPIRES_IN`, `JWT_REFRESH_EXPIRES_IN`)
-- Clear browser localStorage and cookies
+Check logs in `logs/` directory for detailed error messages.
 
-#### Rate Limiting Issues
-- In development, set `DISABLE_RATE_LIMIT=true` in `.env`
-- Or set `NODE_ENV=development` to automatically bypass rate limiting
-- Clear rate limits: `npm run clear-rate-limits` (in backend directory)
-
-### Development Tips
-
-- Use the provided `start.sh` script to start all services at once
-- Use `stop.sh` to stop all services
-- Check service logs in the `logs/` directory
-- Use `npm run seed` to populate test data
-- Use `npm run create-test-user` to create a test user
-
-### Getting Help
-
-1. Check the logs in `backend/logs/` for error messages
-2. Verify all environment variables are set correctly
-3. Ensure all prerequisites are installed and running
-4. Check that all services are running on their expected ports
-
-## Support
-
-For issues, questions, or feature requests, please open an issue on the [GitHub Issues](https://github.com/yourusername/FinForesight/issues) page.

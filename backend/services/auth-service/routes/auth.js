@@ -135,6 +135,12 @@ router.post("/register", registerLimiter, async (req, res) => {
     });
   } catch (error) {
     logger.error("Registration error:", error);
+    logger.error("Registration error stack:", error.stack);
+    logger.error("Registration error details:", {
+      message: error.message,
+      name: error.name,
+      code: error.code,
+    });
     sendInternalError(res);
   }
 });
@@ -272,6 +278,12 @@ router.post("/login", loginLimiter, async (req, res) => {
     });
   } catch (error) {
     logger.error("Login error:", error);
+    logger.error("Login error stack:", error.stack);
+    logger.error("Login error details:", {
+      message: error.message,
+      name: error.name,
+      code: error.code,
+    });
     sendInternalError(res);
   }
 });
@@ -472,9 +484,6 @@ router.put("/preferences", authenticate, async (req, res) => {
       }
       if (typeof notifications.push === "boolean") {
         user.preferences.notifications.push = notifications.push;
-      }
-      if (typeof notifications.fraudAlerts === "boolean") {
-        user.preferences.notifications.fraudAlerts = notifications.fraudAlerts;
       }
     }
 

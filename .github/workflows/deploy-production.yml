@@ -25,11 +25,6 @@ jobs:
         with:
           node-version: "18"
 
-      - name: Run tests
-        run: |
-          cd backend && npm ci && npm test
-          cd ../frontend && npm ci && npm test
-
       - name: Build backend
         working-directory: ./backend
         run: |

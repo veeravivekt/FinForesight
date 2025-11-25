@@ -43,12 +43,6 @@ start_service() {
     echo $! > "$PROJECT_ROOT/logs/$service_name.pid"
 }
 
-# Start Python ML Service
-echo -e "${YELLOW}Starting Python ML Service on port 5000...${NC}"
-cd "$BACKEND_DIR/services/ml-service"
-python3 ml_service.py > "$PROJECT_ROOT/logs/ml-python.log" 2>&1 &
-echo $! > "$PROJECT_ROOT/logs/ml-python.pid"
-sleep 2
 
 # Start Node.js services
 start_service "auth-service" "3008" "services/auth-service/index.js"
@@ -96,8 +90,7 @@ echo -e "  - ML Service: ${GREEN}http://localhost:3003${NC}"
 echo -e "  - Notification Service: ${GREEN}http://localhost:3004${NC}"
 echo -e "  - Account Service: ${GREEN}http://localhost:3005${NC}"
 echo -e "  - Budget Service: ${GREEN}http://localhost:3006${NC}"
-echo -e "  - Goal Service: ${GREEN}http://localhost:3007${NC}"
-echo -e "  - Python ML Service: ${GREEN}http://localhost:5000${NC}"
+    echo -e "  - Goal Service: ${GREEN}http://localhost:3007${NC}"
 echo -e ""
 echo -e "Logs are in: ${YELLOW}$PROJECT_ROOT/logs/${NC}"
 echo -e ""

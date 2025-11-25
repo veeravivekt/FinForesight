@@ -39,10 +39,31 @@ class ApiClient {
             window.location.href = "/login";
           }
         }
-        const error = await response.json().catch(() => ({ error: `Request failed: ${response.status}` }));
+        
+        let error: any;
+        try {
+          error = await response.json();
+        } catch {
+          error = { error: `Request failed: ${response.status}` };
+        }
+        
+        // Extract error message with fallbacks
         const errorMessage = error.error || error.message || `Request failed: ${response.status}`;
-        console.error(`API Error [${response.status}]:`, errorMessage, error);
-        throw new Error(errorMessage);
+        const errorCode = error.code || null;
+        
+        // Log detailed error information
+        console.error(`API Error [${response.status}]:`, {
+          message: errorMessage,
+          code: errorCode,
+          endpoint,
+          fullError: error,
+        });
+        
+        // Create error with more context
+        const apiError = new Error(errorMessage);
+        (apiError as any).status = response.status;
+        (apiError as any).code = errorCode;
+        throw apiError;
       }
 
       return response.json();

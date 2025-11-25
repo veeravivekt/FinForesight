@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Upload, FileText, Image, Trash2, Link2, CheckCircle2, XCircle } from "lucide-react";
+import { Upload, FileText, Trash2, Link2, CheckCircle2, XCircle, RefreshCw, Sparkles, Loader2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -29,7 +29,18 @@ interface Receipt {
   date?: string;
   category?: string;
   isProcessed: boolean;
-  ocrData?: any;
+  ocrData?: {
+    text?: string;
+    confidence?: number;
+    method?: string;
+    extractedData?: {
+      items?: Array<{ description: string; price: number; quantity?: number }>;
+      subtotal?: number;
+      tax?: number;
+      tip?: number;
+      payment_method?: string;
+    };
+  };
   createdAt: string;
 }
 
@@ -57,6 +68,17 @@ export default function ReceiptsPage() {
     },
   });
 
+  const reprocessMutation = useMutation({
+    mutationFn: (id: string) => api.post(`/receipts/${id}/process`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["receipts"] });
+      if (viewingReceipt) {
+        // Refresh the viewing receipt data
+        queryClient.invalidateQueries({ queryKey: ["receipts"] });
+      }
+    },
+  });
+
   const receipts = data?.receipts || [];
 
   const handleDelete = async (id: string) => {
@@ -71,13 +93,6 @@ export default function ReceiptsPage() {
 
   const handleViewReceipt = (receipt: Receipt) => {
     setViewingReceipt(receipt);
-  };
-
-  const getReceiptImageUrl = (imageUrl: string) => {
-    if (imageUrl.startsWith("http")) return imageUrl;
-    // Assuming the backend serves files at /uploads/receipts/
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
-    return `${baseUrl}${imageUrl}`;
   };
 
   const processedCount = receipts.filter((r) => r.isProcessed).length;
@@ -210,14 +225,12 @@ export default function ReceiptsPage() {
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {receipts.map((receipt) => (
             <Card key={receipt._id} className="overflow-hidden">
-              <div className="relative aspect-video bg-gray-100 dark:bg-gray-800">
-                <img
-                  src={getReceiptImageUrl(receipt.imageUrl)}
-                  alt="Receipt"
-                  className="w-full h-full object-contain cursor-pointer"
-                  onClick={() => handleViewReceipt(receipt)}
-                />
-                <div className="absolute top-2 right-2 flex gap-1">
+              <div className="relative aspect-video bg-gray-100 dark:bg-gray-800 flex items-center justify-center cursor-pointer" onClick={() => handleViewReceipt(receipt)}>
+                <div className="flex flex-col items-center justify-center text-gray-400 dark:text-gray-600">
+                  <FileText className="h-16 w-16 mb-2" />
+                  <p className="text-sm">Receipt Image</p>
+                </div>
+                <div className="absolute top-2 right-2 flex gap-1 flex-wrap">
                   {receipt.isProcessed ? (
                     <Badge variant="default" className="bg-green-600">
                       <CheckCircle2 className="h-3 w-3 mr-1" />
@@ -227,6 +240,12 @@ export default function ReceiptsPage() {
                     <Badge variant="secondary">
                       <XCircle className="h-3 w-3 mr-1" />
                       Pending
+                    </Badge>
+                  )}
+                  {receipt.ocrData?.method === "gemini" && (
+                    <Badge variant="outline" className="bg-purple-50 dark:bg-purple-900/20 border-purple-300 dark:border-purple-700">
+                      <Sparkles className="h-3 w-3 mr-1" />
+                      AI Processed
                     </Badge>
                   )}
                 </div>
@@ -257,14 +276,32 @@ export default function ReceiptsPage() {
                       </div>
                     )}
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-red-600 hover:text-red-700"
-                    onClick={() => handleDelete(receipt._id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <div className="flex gap-2">
+                    {!receipt.isProcessed && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => reprocessMutation.mutate(receipt._id)}
+                        disabled={reprocessMutation.isPending}
+                        className="text-xs"
+                      >
+                        {reprocessMutation.isPending ? (
+                          <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                        ) : (
+                          <RefreshCw className="h-3 w-3 mr-1" />
+                        )}
+                        Re-process with AI
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-red-600 hover:text-red-700"
+                      onClick={() => handleDelete(receipt._id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
             </Card>
@@ -280,12 +317,12 @@ export default function ReceiptsPage() {
               <DialogTitle>Receipt Details</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
-              <div className="relative w-full bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden">
-                <img
-                  src={getReceiptImageUrl(viewingReceipt.imageUrl)}
-                  alt="Receipt"
-                  className="w-full h-auto"
-                />
+              <div className="relative w-full bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden flex items-center justify-center p-8 min-h-[200px]">
+                <div className="flex flex-col items-center justify-center text-gray-400 dark:text-gray-600">
+                  <FileText className="h-24 w-24 mb-4" />
+                  <p className="text-sm">Receipt image available</p>
+                  <p className="text-xs mt-1 text-gray-500">Image preview not available</p>
+                </div>
               </div>
               
               <div className="grid gap-4 md:grid-cols-2">
@@ -326,12 +363,139 @@ export default function ReceiptsPage() {
                 )}
               </div>
 
+              {/* Enhanced OCR Data */}
               {viewingReceipt.ocrData && (
-                <div>
-                  <p className="text-sm text-gray-500 mb-2">OCR Data</p>
-                  <pre className="bg-gray-100 dark:bg-gray-800 p-3 rounded text-xs overflow-auto">
-                    {JSON.stringify(viewingReceipt.ocrData, null, 2)}
-                  </pre>
+                <div className="space-y-4">
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-sm font-medium">OCR Information</p>
+                      {viewingReceipt.ocrData.confidence && (
+                        <Badge variant="outline">
+                          Confidence: {(viewingReceipt.ocrData.confidence * 100).toFixed(0)}%
+                        </Badge>
+                      )}
+                      {viewingReceipt.ocrData.method === "gemini" && (
+                        <Badge variant="outline" className="bg-purple-50 dark:bg-purple-900/20 border-purple-300 dark:border-purple-700">
+                          <Sparkles className="h-3 w-3 mr-1" />
+                          Processed with Gemini AI
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Line Items */}
+                  {viewingReceipt.ocrData.extractedData?.items &&
+                    viewingReceipt.ocrData.extractedData.items.length > 0 && (
+                      <div>
+                        <p className="text-sm font-medium mb-2">Line Items</p>
+                        <div className="border rounded-lg divide-y">
+                          {viewingReceipt.ocrData.extractedData.items.map((item: any, idx: number) => (
+                            <div
+                              key={idx}
+                              className="flex items-center justify-between p-3"
+                            >
+                              <div className="flex-1">
+                                <p className="font-medium text-sm">{item.description}</p>
+                                {item.quantity && item.quantity > 1 && (
+                                  <p className="text-xs text-gray-500">
+                                    Qty: {item.quantity}
+                                  </p>
+                                )}
+                              </div>
+                              <p className="font-semibold">${item.price.toFixed(2)}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                  {/* Breakdown */}
+                  {(viewingReceipt.ocrData.extractedData?.subtotal ||
+                    viewingReceipt.ocrData.extractedData?.tax ||
+                    viewingReceipt.ocrData.extractedData?.tip) && (
+                    <div>
+                      <p className="text-sm font-medium mb-2">Breakdown</p>
+                      <div className="border rounded-lg p-3 space-y-2">
+                        {viewingReceipt.ocrData.extractedData.subtotal && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-500">Subtotal</span>
+                            <span className="font-medium">
+                              ${viewingReceipt.ocrData.extractedData.subtotal.toFixed(2)}
+                            </span>
+                          </div>
+                        )}
+                        {viewingReceipt.ocrData.extractedData.tax && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-500">Tax</span>
+                            <span className="font-medium">
+                              ${viewingReceipt.ocrData.extractedData.tax.toFixed(2)}
+                            </span>
+                          </div>
+                        )}
+                        {viewingReceipt.ocrData.extractedData.tip && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-500">Tip</span>
+                            <span className="font-medium">
+                              ${viewingReceipt.ocrData.extractedData.tip.toFixed(2)}
+                            </span>
+                          </div>
+                        )}
+                        {viewingReceipt.amount && (
+                          <div className="flex justify-between text-base font-semibold pt-2 border-t">
+                            <span>Total</span>
+                            <span>${viewingReceipt.amount.toFixed(2)}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Payment Method */}
+                  {viewingReceipt.ocrData.extractedData?.payment_method && (
+                    <div>
+                      <p className="text-sm text-gray-500">Payment Method</p>
+                      <Badge variant="outline" className="mt-1">
+                        {viewingReceipt.ocrData.extractedData.payment_method}
+                      </Badge>
+                    </div>
+                  )}
+
+                  {/* Raw OCR Text (if available and not Gemini) */}
+                  {viewingReceipt.ocrData.text &&
+                    viewingReceipt.ocrData.method !== "gemini" && (
+                      <div>
+                        <p className="text-sm text-gray-500 mb-2">Extracted Text</p>
+                        <pre className="bg-gray-100 dark:bg-gray-800 p-3 rounded text-xs overflow-auto max-h-40">
+                          {viewingReceipt.ocrData.text}
+                        </pre>
+                      </div>
+                    )}
+                </div>
+              )}
+
+              {/* Re-process Button in Dialog */}
+              {!viewingReceipt.isProcessed && (
+                <div className="pt-4 border-t">
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => {
+                      reprocessMutation.mutate(viewingReceipt._id);
+                    }}
+                    disabled={reprocessMutation.isPending}
+                  >
+                    {reprocessMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Re-process with AI
+                      </>
+                    )}
+                  </Button>
                 </div>
               )}
             </div>

@@ -25,29 +25,82 @@ const connectRedis = async () => {
 // Session management
 export const setSession = async (userId, refreshToken, expiresIn = 7 * 24 * 60 * 60) => {
   // expiresIn in seconds (default 7 days)
-  await redisClient.setEx(`session:${userId}`, expiresIn, refreshToken);
+  try {
+    // Ensure Redis is connected
+    if (!redisClient.isOpen) {
+      await redisClient.connect();
+    }
+    await redisClient.setEx(`session:${userId}`, expiresIn, refreshToken);
+  } catch (error) {
+    logger.error("Redis setSession error:", error);
+    // Don't throw - allow login to continue even if Redis fails
+    // In production, you might want to handle this differently
+  }
 };
 
 export const getSession = async (userId) => {
-  return redisClient.get(`session:${userId}`);
+  try {
+    // Ensure Redis is connected
+    if (!redisClient.isOpen) {
+      await redisClient.connect();
+    }
+    return await redisClient.get(`session:${userId}`);
+  } catch (error) {
+    logger.error("Redis getSession error:", error);
+    return null;
+  }
 };
 
 export const deleteSession = async (userId) => {
-  await redisClient.del(`session:${userId}`);
+  try {
+    // Ensure Redis is connected
+    if (!redisClient.isOpen) {
+      await redisClient.connect();
+    }
+    await redisClient.del(`session:${userId}`);
+  } catch (error) {
+    logger.error("Redis deleteSession error:", error);
+  }
 };
 
 // Cache management
 export const setCache = async (key, value, expiresIn = 3600) => {
-  await redisClient.setEx(key, expiresIn, JSON.stringify(value));
+  try {
+    // Ensure Redis is connected
+    if (!redisClient.isOpen) {
+      await redisClient.connect();
+    }
+    await redisClient.setEx(key, expiresIn, JSON.stringify(value));
+  } catch (error) {
+    logger.error("Redis setCache error:", error);
+    // Don't throw - caching is optional
+  }
 };
 
 export const getCache = async (key) => {
-  const data = await redisClient.get(key);
-  return data ? JSON.parse(data) : null;
+  try {
+    // Ensure Redis is connected
+    if (!redisClient.isOpen) {
+      await redisClient.connect();
+    }
+    const data = await redisClient.get(key);
+    return data ? JSON.parse(data) : null;
+  } catch (error) {
+    logger.error("Redis getCache error:", error);
+    return null;
+  }
 };
 
 export const deleteCache = async (key) => {
-  await redisClient.del(key);
+  try {
+    // Ensure Redis is connected
+    if (!redisClient.isOpen) {
+      await redisClient.connect();
+    }
+    await redisClient.del(key);
+  } catch (error) {
+    logger.error("Redis deleteCache error:", error);
+  }
 };
 
 // Pattern-based cache invalidation using SCAN

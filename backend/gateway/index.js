@@ -14,7 +14,9 @@ import { initSentry } from "../shared/utils/sentry.js";
 import healthRoutes from "../shared/routes/health.js";
 import axios from "axios";
 import { createServiceLogger } from "../shared/utils/logger.js";
-import { sendInternalError } from "../shared/utils/errorHandler.js";
+import { sendError, sendInternalError } from "../shared/utils/errorHandler.js";
+import multer from "multer";
+import FormDataLib from "form-data";
 
 // Initialize Sentry
 initSentry();
@@ -37,7 +39,13 @@ const GOAL_SERVICE = process.env.GOAL_SERVICE_URL || "http://localhost:3007";
 // Middleware
 app.use(requestIdMiddleware); // Add request ID for correlation
 app.use(compression()); // Compress responses
-app.use(express.json());
+// Only parse JSON for non-multipart requests
+app.use((req, res, next) => {
+  if (req.headers["content-type"] && req.headers["content-type"].includes("multipart/form-data")) {
+    return next(); // Skip JSON parsing for multipart
+  }
+  express.json()(req, res, next);
+});
 // Enhanced security headers
 app.use(
   helmet({
@@ -82,7 +90,7 @@ app.get("/api-docs/swagger.json", (req, res) => {
 });
 
 
-// Proxy function for API requests (JSON responses)
+// Proxy function for API requests (JSON responses and file uploads)
 const proxyRequest = async (serviceUrl, req, res, servicePathPrefix = "") => {
   try {
     // Express middleware strips the matched prefix from req.path
@@ -112,16 +120,72 @@ const proxyRequest = async (serviceUrl, req, res, servicePathPrefix = "") => {
 
     serviceLogger.info(`Proxying ${req.method} ${req.originalUrl} -> ${fullUrl}`);
 
+    // Prepare headers
+    const headers = {
+      "Authorization": req.headers.authorization || "", // Forward auth header
+    };
+
+    // Check if files were already parsed by multer (for receipt uploads)
+    const contentType = req.headers["content-type"] || "";
+    // Only treat as multipart if files actually exist (not just based on content-type header)
+    const hasFiles = req.files && req.files.length > 0;
+    const isMultipart = hasFiles;
+
+    let requestData = req.body;
+
+    // For multipart/form-data that was parsed by multer, reconstruct FormData
+    if (isMultipart && hasFiles) {
+      const formData = new FormDataLib();
+      
+      // Add files
+      for (const file of req.files) {
+        formData.append(file.fieldname || "image", file.buffer, {
+          filename: file.originalname,
+          contentType: file.mimetype,
+        });
+      }
+      
+      // Add other form fields
+      if (req.body && typeof req.body === "object") {
+        for (const key in req.body) {
+          if (req.body[key] !== undefined && req.body[key] !== null) {
+            formData.append(key, req.body[key]);
+          }
+        }
+      }
+
+      // Forward headers (form-data will set Content-Type with boundary)
+      const formHeaders = formData.getHeaders();
+      const forwardHeaders = {
+        ...headers,
+        ...formHeaders,
+      };
+
+      const response = await axios({
+        method: req.method,
+        url: fullUrl,
+        data: formData,
+        headers: forwardHeaders,
+        validateStatus: () => true,
+        timeout: 120000, // 2 minutes for file uploads
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity,
+      });
+
+      return res.status(response.status).json(response.data);
+    }
+
+    // For non-multipart requests (including multipart content-type without files)
+    // Always use application/json when sending JSON data to avoid header/body mismatch
+    headers["Content-Type"] = "application/json";
+
     const response = await axios({
       method: req.method,
       url: fullUrl,
-      data: req.body,
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": req.headers.authorization || "", // Forward auth header
-      },
+      data: requestData,
+      headers,
       validateStatus: () => true, // Accept all status codes
-      timeout: 30000, // 30 second timeout
+      timeout: 30000, // 30 second timeout for regular requests
     });
 
     // Forward the response status and data
@@ -237,12 +301,50 @@ app.use("/api/auth", async (req, res, next) => {
 
 // Export routes (authentication required, returns files)
 // Must be before /api/transactions to match first
+// Support both /api and /api/v1 prefixes
+
+// Versioned export routes (/api/v1/transactions/export/*)
+app.get(`${apiPrefix}/transactions/export/csv`, authenticate, async (req, res, next) => {
+  try {
+    // Extract export path from the route - we know it's /export/csv
+    await proxyStaticFile(TRANSACTION_SERVICE, req, res, "/transactions", "/export/csv");
+  } catch (error) {
+    serviceLogger.error("Export CSV route error:", error);
+    next(error);
+  }
+});
+
+app.get(`${apiPrefix}/transactions/export/pdf`, authenticate, async (req, res, next) => {
+  try {
+    await proxyStaticFile(TRANSACTION_SERVICE, req, res, "/transactions", "/export/pdf");
+  } catch (error) {
+    serviceLogger.error("Export PDF route error:", error);
+    next(error);
+  }
+});
+
+app.get(`${apiPrefix}/transactions/export/excel`, authenticate, async (req, res, next) => {
+  try {
+    await proxyStaticFile(TRANSACTION_SERVICE, req, res, "/transactions", "/export/excel");
+  } catch (error) {
+    serviceLogger.error("Export Excel route error:", error);
+    next(error);
+  }
+});
+
+app.get(`${apiPrefix}/transactions/export/json`, authenticate, async (req, res, next) => {
+  try {
+    await proxyStaticFile(TRANSACTION_SERVICE, req, res, "/transactions", "/export/json");
+  } catch (error) {
+    serviceLogger.error("Export JSON route error:", error);
+    next(error);
+  }
+});
+
+// Legacy export routes (/api/transactions/export/*)
 app.get("/api/transactions/export/csv", authenticate, async (req, res, next) => {
   try {
-    // req.path is read-only, so we need to manually construct the correct path
-    // Remove "/api/transactions" prefix from req.path to get "/export/csv"
-    const correctedPath = req.path.replace("/api/transactions", "");
-    await proxyStaticFile(TRANSACTION_SERVICE, req, res, "/transactions", correctedPath);
+    await proxyStaticFile(TRANSACTION_SERVICE, req, res, "/transactions", "/export/csv");
   } catch (error) {
     serviceLogger.error("Export CSV route error:", error);
     next(error);
@@ -251,10 +353,7 @@ app.get("/api/transactions/export/csv", authenticate, async (req, res, next) => 
 
 app.get("/api/transactions/export/pdf", authenticate, async (req, res, next) => {
   try {
-    // req.path is read-only, so we need to manually construct the correct path
-    // Remove "/api/transactions" prefix from req.path to get "/export/pdf"
-    const correctedPath = req.path.replace("/api/transactions", "");
-    await proxyStaticFile(TRANSACTION_SERVICE, req, res, "/transactions", correctedPath);
+    await proxyStaticFile(TRANSACTION_SERVICE, req, res, "/transactions", "/export/pdf");
   } catch (error) {
     serviceLogger.error("Export PDF route error:", error);
     next(error);
@@ -263,10 +362,7 @@ app.get("/api/transactions/export/pdf", authenticate, async (req, res, next) => 
 
 app.get("/api/transactions/export/excel", authenticate, async (req, res, next) => {
   try {
-    // req.path is read-only, so we need to manually construct the correct path
-    // Remove "/api/transactions" prefix from req.path to get "/export/excel"
-    const correctedPath = req.path.replace("/api/transactions", "");
-    await proxyStaticFile(TRANSACTION_SERVICE, req, res, "/transactions", correctedPath);
+    await proxyStaticFile(TRANSACTION_SERVICE, req, res, "/transactions", "/export/excel");
   } catch (error) {
     serviceLogger.error("Export Excel route error:", error);
     next(error);
@@ -275,54 +371,14 @@ app.get("/api/transactions/export/excel", authenticate, async (req, res, next) =
 
 app.get("/api/transactions/export/json", authenticate, async (req, res, next) => {
   try {
-    // req.path is read-only, so we need to manually construct the correct path
-    // Remove "/api/transactions" prefix from req.path to get "/export/json"
-    const correctedPath = req.path.replace("/api/transactions", "");
-    await proxyStaticFile(TRANSACTION_SERVICE, req, res, "/transactions", correctedPath);
+    await proxyStaticFile(TRANSACTION_SERVICE, req, res, "/transactions", "/export/json");
   } catch (error) {
     serviceLogger.error("Export JSON route error:", error);
     next(error);
   }
 });
 
-// Bulk transaction routes (must be before catch-all transaction routes)
-app.use(`${apiPrefix}/transactions/bulk`, authenticate, async (req, res, next) => {
-  try {
-    await proxyRequest(TRANSACTION_SERVICE, req, res, "/transactions/bulk");
-  } catch (error) {
-    serviceLogger.error("Bulk transaction route error:", error);
-    next(error);
-  }
-});
-app.use("/api/transactions/bulk", authenticate, async (req, res, next) => {
-  try {
-    await proxyRequest(TRANSACTION_SERVICE, req, res, "/transactions/bulk");
-  } catch (error) {
-    serviceLogger.error("Bulk transaction route error:", error);
-    next(error);
-  }
-});
-
-// Transaction template routes (must be before catch-all transaction routes)
-app.use(`${apiPrefix}/transactions/templates`, authenticate, async (req, res, next) => {
-  try {
-    await proxyRequest(TRANSACTION_SERVICE, req, res, "/transactions/templates");
-  } catch (error) {
-    serviceLogger.error("Transaction template route error:", error);
-    next(error);
-  }
-});
-app.use("/api/transactions/templates", authenticate, async (req, res, next) => {
-  try {
-    await proxyRequest(TRANSACTION_SERVICE, req, res, "/transactions/templates");
-  } catch (error) {
-    serviceLogger.error("Transaction template route error:", error);
-    next(error);
-  }
-});
-
 // Transaction routes (authentication required) - Support both /api and /api/v1
-// This catch-all route must come AFTER specific routes like /bulk and /templates
 app.use(`${apiPrefix}/transactions`, authenticate, async (req, res, next) => {
   try {
     await proxyRequest(TRANSACTION_SERVICE, req, res, "/transactions");
@@ -350,15 +406,84 @@ app.use("/api/recurring", authenticate, async (req, res, next) => {
   }
 });
 
-// Receipt routes (authentication required)
-app.use("/api/receipts", authenticate, async (req, res, next) => {
+// Receipt routes (authentication required) - Support both /api and /api/v1
+// Need special handling for file uploads
+const receiptUpload = multer({ storage: multer.memoryStorage() });
+
+// Helper function to proxy receipt requests (handles both JSON and multipart)
+const proxyReceiptRequest = async (req, res, next) => {
   try {
-    await proxyRequest(TRANSACTION_SERVICE, req, res, "/receipts");
+    serviceLogger.info(`[Receipt Route] ${req.method} ${req.originalUrl}, path: ${req.path}, hasFiles: ${!!(req.files && req.files.length > 0)}`);
+    
+    // Only treat as multipart if files actually exist (not just based on content-type header)
+    const hasFiles = req.files && req.files.length > 0;
+    const isMultipart = hasFiles;
+    
+    if (isMultipart && hasFiles) {
+      // For multipart, multer should have already parsed it
+      // Now forward to transaction service
+      let targetPath = "/receipts";
+      if (req.path && req.path !== "/") {
+        targetPath = "/receipts" + req.path;
+      }
+      
+      const fullUrl = `${TRANSACTION_SERVICE}${targetPath}`;
+      serviceLogger.info(`[Receipt Upload] Proxying ${req.method} ${req.originalUrl} -> ${fullUrl}`);
+      
+      // Reconstruct FormData for forwarding
+      const formData = new FormDataLib();
+      
+      // Add files
+      for (const file of req.files) {
+        formData.append(file.fieldname || "image", file.buffer, {
+          filename: file.originalname,
+          contentType: file.mimetype,
+        });
+      }
+      
+      // Add other form fields
+      if (req.body && typeof req.body === "object") {
+        for (const key in req.body) {
+          if (req.body[key] !== undefined && req.body[key] !== null) {
+            formData.append(key, req.body[key]);
+          }
+        }
+      }
+      
+      const formHeaders = formData.getHeaders();
+      const response = await axios({
+        method: req.method,
+        url: fullUrl,
+        data: formData,
+        headers: {
+          "Authorization": req.headers.authorization || "",
+          ...formHeaders,
+        },
+        validateStatus: () => true,
+        timeout: 120000,
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity,
+      });
+      
+      return res.status(response.status).json(response.data);
+    } else {
+      // For non-multipart, use regular proxy
+      await proxyRequest(TRANSACTION_SERVICE, req, res, "/receipts");
+    }
   } catch (error) {
-    serviceLogger.error("Receipt route error:", error);
+    serviceLogger.error("[Receipt Route Error]:", error);
+    serviceLogger.error("Error details:", error.message);
+    if (error.response) {
+      serviceLogger.error("Response status:", error.response.status);
+      serviceLogger.error("Response data:", error.response.data);
+    }
     next(error);
   }
-});
+};
+
+// Receipt routes with multer middleware for file uploads
+app.use(`${apiPrefix}/receipts`, authenticate, receiptUpload.any(), proxyReceiptRequest);
+app.use("/api/receipts", authenticate, receiptUpload.any(), proxyReceiptRequest);
 
 // Reports routes (authentication required)
 app.use("/api/reports", authenticate, async (req, res, next) => {
@@ -380,15 +505,129 @@ app.use("/uploads", authenticate, async (req, res, next) => {
   }
 });
 
-// ML routes (authentication required)
-app.use("/api/ml", authenticate, async (req, res, next) => {
+// ML routes (authentication required) - Support both /api/ml and /api/v1/ml
+// Use a custom proxy function with extended timeout for ML routes
+const proxyMLRequest = async (req, res, next) => {
   try {
-    await proxyRequest(ML_SERVICE, req, res, "");
+    // Express strips the matched prefix from req.path
+    // For /api/v1/ml/cashflow/forecast, after matching /api/v1/ml, req.path becomes /cashflow/forecast
+    let targetPath = req.path;
+    
+    // Debug logging to help troubleshoot
+    serviceLogger.info(`[ML Route] originalUrl: ${req.originalUrl}, path: ${req.path}, baseUrl: ${req.baseUrl}, url: ${req.url}`);
+    
+    // If path is empty or just "/", extract from originalUrl
+    if (!targetPath || targetPath === '/') {
+      // Extract the path after /api/v1/ml or /api/ml
+      const match = req.originalUrl.match(/\/api\/(?:v\d+\/)?ml(\/.*)?$/);
+      if (match && match[1]) {
+        targetPath = match[1];
+      } else {
+        targetPath = '/';
+      }
+    }
+    
+    // Ensure path starts with /
+    if (!targetPath.startsWith('/')) {
+      targetPath = '/' + targetPath;
+    }
+    
+    // Build query string if needed
+    const queryString = req.query && Object.keys(req.query).length > 0
+      ? `?${new URLSearchParams(req.query).toString()}`
+      : "";
+
+    const fullUrl = `${ML_SERVICE}${targetPath}${queryString}`;
+
+    serviceLogger.info(`[ML Proxy] ${req.method} ${req.originalUrl} -> ${fullUrl} (req.path: ${req.path}, targetPath: ${targetPath})`);
+
+    // Increase timeout for ML routes (especially cashflow forecast which can take longer)
+    const timeout = req.originalUrl.includes('/cashflow/forecast') ? 120000 : 60000; // 2 minutes for forecast, 1 minute for other ML routes
+    
+    let response;
+    try {
+      response = await axios({
+        method: req.method,
+        url: fullUrl,
+        data: req.body,
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": req.headers.authorization || "",
+        },
+        validateStatus: () => true,
+        timeout,
+      });
+
+      serviceLogger.info(`[ML Response] Status: ${response.status} for ${req.originalUrl}`);
+
+      // Forward the response status and data
+      if (!res.headersSent) {
+        return res.status(response.status).json(response.data);
+      }
+    } catch (axiosError) {
+      // Handle axios-specific errors
+      if (axiosError.code === 'ECONNREFUSED') {
+        serviceLogger.error(`[ML Service] Connection refused to ${fullUrl}. Is the ML service running?`);
+        if (!res.headersSent) {
+          return sendError(res, 503, "ML service is unavailable. Please try again later.", "SERVICE_UNAVAILABLE");
+        }
+      } else if (axiosError.code === 'ETIMEDOUT' || axiosError.message?.includes('timeout')) {
+        serviceLogger.error(`[ML Service] Request timeout after ${timeout}ms for ${fullUrl}`);
+        if (!res.headersSent) {
+          return sendError(res, 504, "Request timeout. The ML service took too long to respond.", "TIMEOUT");
+        }
+      } else if (axiosError.response) {
+        // Service responded with an error status
+        serviceLogger.error(`[ML Service] Error response ${axiosError.response.status} from ${fullUrl}:`, axiosError.response.data);
+        if (!res.headersSent) {
+          return res.status(axiosError.response.status).json(axiosError.response.data);
+        }
+      } else {
+        // Other axios errors
+        serviceLogger.error(`[ML Service] Axios error for ${fullUrl}:`, {
+          message: axiosError.message,
+          code: axiosError.code,
+          stack: axiosError.stack,
+        });
+        if (!res.headersSent) {
+          return sendInternalError(res, `ML service error: ${axiosError.message}`);
+        }
+      }
+      return;
+    }
   } catch (error) {
-    serviceLogger.error("ML route error:", error);
-    next(error);
+    serviceLogger.error("[ML Route Error]:", error);
+    serviceLogger.error("Error details:", {
+      message: error.message,
+      name: error.name,
+      stack: error.stack,
+    });
+    
+    if (error.response) {
+      serviceLogger.error("Response status:", error.response.status);
+      serviceLogger.error("Response data:", error.response.data);
+    }
+    
+    if (!res.headersSent) {
+      return sendInternalError(res, error.message || "Internal server error");
+    } else {
+      serviceLogger.error("Cannot send error response - headers already sent");
+    }
   }
-});
+};
+
+// ML routes must be registered before the 404 handler
+// Use explicit path matching to ensure routes are matched correctly
+// Test route to verify matching works
+app.use(`${apiPrefix}/ml`, (req, res, next) => {
+  serviceLogger.info(`[ML Route Test] Matched ${apiPrefix}/ml for ${req.originalUrl}, path: ${req.path}`);
+  next();
+}, authenticate, proxyMLRequest);
+
+app.use("/api/ml", (req, res, next) => {
+  serviceLogger.info(`[ML Route Test] Matched /api/ml for ${req.originalUrl}, path: ${req.path}`);
+  next();
+}, authenticate, proxyMLRequest);
 
 // Account routes (authentication required) - Support both /api and /api/v1
 app.use(`${apiPrefix}/accounts`, authenticate, async (req, res, next) => {

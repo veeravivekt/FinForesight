@@ -23,7 +23,6 @@ interface UserData {
     notifications: {
       email: boolean;
       push: boolean;
-      fraudAlerts: boolean;
     };
   };
 }
@@ -54,7 +53,6 @@ export default function SettingsPage() {
     notifications: {
       email: true,
       push: true,
-      fraudAlerts: true,
     },
   });
 
@@ -78,7 +76,6 @@ export default function SettingsPage() {
         notifications: {
           email: user.preferences?.notifications?.email ?? true,
           push: user.preferences?.notifications?.push ?? true,
-          fraudAlerts: user.preferences?.notifications?.fraudAlerts ?? true,
         },
       });
     }
@@ -382,30 +379,6 @@ export default function SettingsPage() {
                 </Button>
               </div>
 
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label htmlFor="fraud-alerts" className="text-sm font-normal">
-                    Fraud Alerts
-                  </Label>
-                  <p className="text-xs text-gray-500">Get alerts for suspicious transactions</p>
-                </div>
-                <Button
-                  type="button"
-                  variant={preferencesForm.notifications.fraudAlerts ? "default" : "outline"}
-                  size="sm"
-                  onClick={() =>
-                    setPreferencesForm({
-                      ...preferencesForm,
-                      notifications: {
-                        ...preferencesForm.notifications,
-                        fraudAlerts: !preferencesForm.notifications.fraudAlerts,
-                      },
-                    })
-                  }
-                >
-                  {preferencesForm.notifications.fraudAlerts ? "Enabled" : "Disabled"}
-                </Button>
-              </div>
             </div>
 
             <Button

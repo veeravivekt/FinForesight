@@ -1,9 +1,7 @@
 import validator from "validator";
-import createDOMPurify from "dompurify";
-import { JSDOM } from "jsdom";
 
-const {window} = new JSDOM("");
-const DOMPurify = createDOMPurify(window);
+// Note: jsdom/dompurify removed due to ES module compatibility issues
+// Using validator.escape which provides sufficient XSS protection
 
 export const validateEmail = (email) => {
   return validator.isEmail(email);
@@ -71,11 +69,8 @@ export const sanitizeInput = (input) => {
     // First trim whitespace
     let sanitized = input.trim();
 
-    // Escape HTML entities using validator
+    // Escape HTML entities using validator (provides XSS protection)
     sanitized = validator.escape(sanitized);
-
-    // Additional DOM purification for extra safety
-    sanitized = DOMPurify.sanitize(sanitized);
 
     return sanitized;
   }

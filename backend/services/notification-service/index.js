@@ -58,10 +58,6 @@ io.on("connection", (socket) => {
     io.to(`user:${socket.userId}`).emit("transaction:created", data);
   });
 
-  // Handle fraud alerts
-  socket.on("fraud:alert", (data) => {
-    io.to(`user:${socket.userId}`).emit("fraud:detected", data);
-  });
 
   // Handle budget warnings
   socket.on("budget:warning", (data) => {

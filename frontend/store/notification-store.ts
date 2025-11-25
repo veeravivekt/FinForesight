@@ -2,7 +2,7 @@ import { create } from "zustand";
 
 export interface Notification {
   id: string;
-  type: "transaction" | "budget" | "goal" | "fraud";
+  type: "transaction" | "budget" | "goal";
   event: string;
   title: string;
   message: string;
@@ -74,5 +74,6 @@ export const useNotificationStore = create<NotificationState>((set) => ({
     });
   },
 }));
+
 
 

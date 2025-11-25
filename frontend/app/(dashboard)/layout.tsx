@@ -8,7 +8,7 @@ import { connectWebSocket, disconnectWebSocket, getSocket } from "@/lib/websocke
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Wallet, LogOut, LayoutDashboard, CreditCard, Target, TrendingUp, Settings, FileText, Repeat, Receipt, Bell } from "lucide-react";
+import { Wallet, LogOut, LayoutDashboard, CreditCard, Target, TrendingUp, Settings, FileText, Repeat, Receipt, Bell, Bot, TrendingDown } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,9 +25,11 @@ const navigation = [
   { name: "Transactions", href: "/transactions", icon: CreditCard },
   { name: "Budgets", href: "/budgets", icon: TrendingUp },
   { name: "Goals", href: "/goals", icon: Target },
+  { name: "Cash Flow", href: "/cashflow", icon: TrendingDown },
   { name: "Bills", href: "/bills", icon: Repeat },
   { name: "Receipts", href: "/receipts", icon: Receipt },
   { name: "Reports", href: "/reports", icon: FileText },
+  { name: "AI Assistant", href: "/ai-assistant", icon: Bot },
   { name: "Settings", href: "/settings", icon: Settings },
 ];
 
@@ -105,28 +107,6 @@ export default function DashboardLayout({
           });
         });
 
-        socket.on("goal:milestone", (data: any) => {
-          addNotification({
-            type: "goal",
-            event: "milestone",
-            title: "Goal Milestone",
-            message: `You've reached ${data.milestone} of your goal: ${data.name}`,
-            data,
-            timestamp: data.timestamp || new Date().toISOString(),
-          });
-        });
-
-        // Listen for fraud alerts
-        socket.on("fraud:detected", (data: any) => {
-          addNotification({
-            type: "fraud",
-            event: "detected",
-            title: "Fraud Alert",
-            message: `Suspicious transaction detected: $${Math.abs(data.amount).toFixed(2)}`,
-            data,
-            timestamp: data.timestamp || new Date().toISOString(),
-          });
-        });
 
         return () => {
           disconnectWebSocket();

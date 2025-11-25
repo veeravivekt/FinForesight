@@ -8,8 +8,6 @@ import transactionRoutes from "./routes/transaction.js";
 import recurringRoutes from "./routes/recurring.js";
 import receiptRoutes from "./routes/receipt.js";
 import reportsRoutes from "./routes/reports.js";
-import bulkRoutes from "./routes/bulk.js";
-import templateRoutes from "./routes/templates.js";
 import { authenticate } from "../../shared/middleware/auth.js";
 import { connectDB } from "../../shared/utils/database.js";
 import { createServiceLogger } from "../../shared/utils/logger.js";
@@ -32,7 +30,7 @@ app.use(cors({
 }));
 
 // Serve uploaded receipt files with authentication
-app.use("/uploads/receipts", authenticate, async (req, res, next) => {
+app.use("/uploads/receipts", authenticate, async (req, res, _next) => {
   // Verify user owns the receipt before serving
   try {
     const Receipt = (await import("../../shared/models/Receipt.js")).default;
@@ -70,8 +68,6 @@ app.use("/uploads/receipts", authenticate, async (req, res, next) => {
 
 // Routes
 app.use("/transactions", authenticate, transactionRoutes);
-app.use("/transactions/bulk", authenticate, bulkRoutes);
-app.use("/transactions/templates", authenticate, templateRoutes);
 app.use("/recurring", authenticate, recurringRoutes);
 app.use("/receipts", authenticate, receiptRoutes);
 app.use("/reports", authenticate, reportsRoutes);
@@ -82,7 +78,7 @@ app.get("/health", (req, res) => {
 });
 
 // Error handling middleware
-app.use((error, req, res, next) => {
+app.use((error, req, res, _next) => {
   serviceLogger.error("Unhandled error:", error);
   serviceLogger.error("Error stack:", error.stack);
 
