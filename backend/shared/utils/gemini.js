@@ -45,17 +45,17 @@ export function getGeminiModel() {
     // Use gemini-2.5-flash-live as default
     // Can override with GEMINI_MODEL env var
     const primaryModel = process.env.GEMINI_MODEL || "gemini-2.5-flash-live";
-    
+
     // Fallback models in order of preference
     const fallbackModels = [
       "gemini-2.5-flash",        // Alternative flash model
       "gemini-2.0-flash-lite",    // Previous default
       "gemini-flash-latest",      // Latest flash model
     ];
-    
+
     // Try primary model first, then fallbacks
     const modelsToTry = [primaryModel, ...fallbackModels];
-    
+
     let lastError = null;
     for (const modelName of modelsToTry) {
       try {
@@ -68,7 +68,7 @@ export function getGeminiModel() {
         // Continue to next fallback
       }
     }
-    
+
     if (!geminiModel) {
       logger.error("Failed to load any Gemini model. Last error:", lastError);
       return null;
@@ -111,7 +111,7 @@ export async function generateText(prompt, options = {}) {
     });
 
     const response = await result.response;
-    
+
     // Check if response was blocked
     if (!response || !response.candidates || response.candidates.length === 0) {
       logger.error("Gemini response blocked or empty:", {
@@ -120,9 +120,9 @@ export async function generateText(prompt, options = {}) {
       });
       throw new Error("AI response was blocked. Please try rephrasing your question.");
     }
-    
+
     const text = response.text();
-    
+
     if (!text || text.trim().length === 0) {
       logger.error("Empty text in Gemini response");
       throw new Error("AI service returned an empty response. Please try again.");
@@ -137,7 +137,7 @@ export async function generateText(prompt, options = {}) {
       code: error.code,
       status: error.status,
     });
-    
+
     // Handle rate limiting
     if (error.message?.includes("429") || error.message?.includes("quota") || error.status === 429) {
       throw new Error("Rate limit exceeded. Please try again later.");
@@ -147,7 +147,7 @@ export async function generateText(prompt, options = {}) {
     if (error.message?.includes("API_KEY") || error.message?.includes("401") || error.status === 401) {
       throw new Error("Invalid API key. Please check GEMINI_API_KEY configuration.");
     }
-    
+
     // Handle blocked content
     if (error.message?.includes("blocked") || error.message?.includes("safety")) {
       throw error;
@@ -232,7 +232,7 @@ export async function generateFromImage(imageBase64, mimeType, prompt) {
     return text;
   } catch (error) {
     logger.error("Gemini Vision API error:", error);
-    
+
     if (error.message?.includes("429") || error.message?.includes("quota")) {
       throw new Error("Rate limit exceeded. Please try again later.");
     }
@@ -270,7 +270,7 @@ Return ONLY the JSON object, no other text.`;
 
   try {
     const responseText = await generateFromImage(imageBase64, mimeType, prompt);
-    
+
     // Extract JSON from response (handle cases where response includes markdown code blocks)
     let jsonText = responseText.trim();
     if (jsonText.startsWith("```json")) {
@@ -278,17 +278,17 @@ Return ONLY the JSON object, no other text.`;
     } else if (jsonText.startsWith("```")) {
       jsonText = jsonText.replace(/```\n?/g, "");
     }
-    
+
     const extractedData = JSON.parse(jsonText);
-    
+
     // Calculate confidence based on extracted fields
     let confidence = 0;
-    if (extractedData.merchant) confidence += 0.2;
-    if (extractedData.amount || extractedData.total) confidence += 0.3;
-    if (extractedData.date) confidence += 0.2;
-    if (extractedData.category) confidence += 0.1;
-    if (extractedData.items && extractedData.items.length > 0) confidence += 0.2;
-    
+    if (extractedData.merchant) {confidence += 0.2;}
+    if (extractedData.amount || extractedData.total) {confidence += 0.3;}
+    if (extractedData.date) {confidence += 0.2;}
+    if (extractedData.category) {confidence += 0.1;}
+    if (extractedData.items && extractedData.items.length > 0) {confidence += 0.2;}
+
     return {
       merchant: extractedData.merchant || null,
       amount: extractedData.amount || extractedData.total || null,

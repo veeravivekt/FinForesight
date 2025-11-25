@@ -96,7 +96,7 @@ function calculateDailyProjections(
 
   // Add recurring transactions
   recurringTransactions.forEach((recurring) => {
-    let nextDate = new Date(recurring.lastDate);
+    const nextDate = new Date(recurring.lastDate);
     nextDate.setDate(nextDate.getDate() + recurring.intervalDays);
 
     while (nextDate <= new Date(startDate.getTime() + days * 24 * 60 * 60 * 1000)) {
@@ -160,7 +160,7 @@ function findLowBalanceWarnings(projections, threshold = 100) {
 router.post("/forecast", async (req, res) => {
   try {
     const { accountId, days = 90 } = req.body;
-    const userId = req.userId;
+    const {userId} = req;
 
     if (days < 1 || days > 365) {
       return sendValidationError(res, "Days must be between 1 and 365");
@@ -289,7 +289,7 @@ Be specific and actionable.`;
           temperature: 0.7,
           maxTokens: 300,
         });
-        
+
         if (!insights || insights.trim().length === 0) {
           throw new Error("Empty response from Gemini");
         }
@@ -299,36 +299,36 @@ Be specific and actionable.`;
           message: error.message,
           name: error.name,
         });
-        
+
         // Generate fallback insights based on data
         const minBalance = Math.min(...projections.map((p) => p.balance));
         const maxBalance = Math.max(...projections.map((p) => p.balance));
         const endBalance = projections[projections.length - 1].balance;
         const avgDailyChange = projections.reduce((sum, p) => sum + p.netChange, 0) / projections.length;
-        
+
         const fallbackInsights = [];
-        
+
         if (lowBalanceWarnings.length > 0) {
           fallbackInsights.push(`⚠️ Your balance may drop below $100 on ${lowBalanceWarnings.length} day(s) in the forecast period.`);
         }
-        
+
         if (endBalance < currentBalance) {
           fallbackInsights.push(`📉 Your balance is projected to decrease by $${(currentBalance - endBalance).toFixed(2)} over the next ${days} days.`);
         } else if (endBalance > currentBalance) {
           fallbackInsights.push(`📈 Your balance is projected to increase by $${(endBalance - currentBalance).toFixed(2)} over the next ${days} days.`);
         }
-        
+
         if (upcomingBills.length > 0) {
           const totalBills = upcomingBills.reduce((sum, b) => sum + b.amount, 0);
           fallbackInsights.push(`💳 You have ${upcomingBills.length} recurring bill(s) totaling $${totalBills.toFixed(2)} coming up.`);
         }
-        
+
         if (avgDailyChange < 0) {
           fallbackInsights.push(`💰 On average, you're spending $${Math.abs(avgDailyChange).toFixed(2)} more per day than you're earning.`);
         }
-        
-        insights = fallbackInsights.length > 0 
-          ? fallbackInsights.join(" ") 
+
+        insights = fallbackInsights.length > 0
+          ? fallbackInsights.join(" ")
           : `Your account balance ranges from $${minBalance.toFixed(2)} to $${maxBalance.toFixed(2)} over the next ${days} days.`;
       }
 

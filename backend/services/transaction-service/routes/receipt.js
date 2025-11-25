@@ -119,7 +119,7 @@ router.post("/upload", receiptLimiter, upload.single("image"), async (req, res) 
       // Read file and convert to base64
       const fileBuffer = fs.readFileSync(filePath);
       const imageBase64 = fileBuffer.toString("base64");
-      
+
       // Determine MIME type from file extension
       const ext = path.extname(filePath).toLowerCase();
       let mimeType = "image/jpeg";
@@ -133,7 +133,7 @@ router.post("/upload", receiptLimiter, upload.single("image"), async (req, res) 
 
       // Extract receipt data using Gemini Vision
       const result = await extractReceiptData(imageBase64, mimeType);
-      
+
       confidence = result.confidence || 0;
       extractedData = {
         merchant: result.merchant || null,
@@ -146,7 +146,7 @@ router.post("/upload", receiptLimiter, upload.single("image"), async (req, res) 
         items: result.items || [],
         payment_method: result.payment_method || null,
       };
-      
+
       ocrData = {
         extractedData,
         confidence,
@@ -384,7 +384,7 @@ router.post("/:id/process", receiptLimiter, async (req, res) => {
       // Read file and convert to base64
       const fileBuffer = fs.readFileSync(filePath);
       const imageBase64 = fileBuffer.toString("base64");
-      
+
       // Determine MIME type from file extension
       const ext = path.extname(filePath).toLowerCase();
       let mimeType = "image/jpeg";
@@ -398,7 +398,7 @@ router.post("/:id/process", receiptLimiter, async (req, res) => {
 
       // Extract receipt data using Gemini Vision
       const result = await extractReceiptData(imageBase64, mimeType);
-      
+
       confidence = result.confidence || 0;
       extractedData = {
         merchant: result.merchant || null,
@@ -411,7 +411,7 @@ router.post("/:id/process", receiptLimiter, async (req, res) => {
         items: result.items || [],
         payment_method: result.payment_method || null,
       };
-      
+
       ocrData = {
         extractedData,
         confidence,

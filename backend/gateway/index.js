@@ -131,12 +131,12 @@ const proxyRequest = async (serviceUrl, req, res, servicePathPrefix = "") => {
     const hasFiles = req.files && req.files.length > 0;
     const isMultipart = hasFiles;
 
-    let requestData = req.body;
+    const requestData = req.body;
 
     // For multipart/form-data that was parsed by multer, reconstruct FormData
     if (isMultipart && hasFiles) {
       const formData = new FormDataLib();
-      
+
       // Add files
       for (const file of req.files) {
         formData.append(file.fieldname || "image", file.buffer, {
@@ -144,7 +144,7 @@ const proxyRequest = async (serviceUrl, req, res, servicePathPrefix = "") => {
           contentType: file.mimetype,
         });
       }
-      
+
       // Add other form fields
       if (req.body && typeof req.body === "object") {
         for (const key in req.body) {
@@ -414,25 +414,25 @@ const receiptUpload = multer({ storage: multer.memoryStorage() });
 const proxyReceiptRequest = async (req, res, next) => {
   try {
     serviceLogger.info(`[Receipt Route] ${req.method} ${req.originalUrl}, path: ${req.path}, hasFiles: ${!!(req.files && req.files.length > 0)}`);
-    
+
     // Only treat as multipart if files actually exist (not just based on content-type header)
     const hasFiles = req.files && req.files.length > 0;
     const isMultipart = hasFiles;
-    
+
     if (isMultipart && hasFiles) {
       // For multipart, multer should have already parsed it
       // Now forward to transaction service
       let targetPath = "/receipts";
       if (req.path && req.path !== "/") {
-        targetPath = "/receipts" + req.path;
+        targetPath = `/receipts${  req.path}`;
       }
-      
+
       const fullUrl = `${TRANSACTION_SERVICE}${targetPath}`;
       serviceLogger.info(`[Receipt Upload] Proxying ${req.method} ${req.originalUrl} -> ${fullUrl}`);
-      
+
       // Reconstruct FormData for forwarding
       const formData = new FormDataLib();
-      
+
       // Add files
       for (const file of req.files) {
         formData.append(file.fieldname || "image", file.buffer, {
@@ -440,7 +440,7 @@ const proxyReceiptRequest = async (req, res, next) => {
           contentType: file.mimetype,
         });
       }
-      
+
       // Add other form fields
       if (req.body && typeof req.body === "object") {
         for (const key in req.body) {
@@ -449,7 +449,7 @@ const proxyReceiptRequest = async (req, res, next) => {
           }
         }
       }
-      
+
       const formHeaders = formData.getHeaders();
       const response = await axios({
         method: req.method,
@@ -464,7 +464,7 @@ const proxyReceiptRequest = async (req, res, next) => {
         maxContentLength: Infinity,
         maxBodyLength: Infinity,
       });
-      
+
       return res.status(response.status).json(response.data);
     } else {
       // For non-multipart, use regular proxy
@@ -512,26 +512,26 @@ const proxyMLRequest = async (req, res, next) => {
     // Express strips the matched prefix from req.path
     // For /api/v1/ml/cashflow/forecast, after matching /api/v1/ml, req.path becomes /cashflow/forecast
     let targetPath = req.path;
-    
+
     // Debug logging to help troubleshoot
     serviceLogger.info(`[ML Route] originalUrl: ${req.originalUrl}, path: ${req.path}, baseUrl: ${req.baseUrl}, url: ${req.url}`);
-    
+
     // If path is empty or just "/", extract from originalUrl
-    if (!targetPath || targetPath === '/') {
+    if (!targetPath || targetPath === "/") {
       // Extract the path after /api/v1/ml or /api/ml
       const match = req.originalUrl.match(/\/api\/(?:v\d+\/)?ml(\/.*)?$/);
       if (match && match[1]) {
         targetPath = match[1];
       } else {
-        targetPath = '/';
+        targetPath = "/";
       }
     }
-    
+
     // Ensure path starts with /
-    if (!targetPath.startsWith('/')) {
-      targetPath = '/' + targetPath;
+    if (!targetPath.startsWith("/")) {
+      targetPath = `/${  targetPath}`;
     }
-    
+
     // Build query string if needed
     const queryString = req.query && Object.keys(req.query).length > 0
       ? `?${new URLSearchParams(req.query).toString()}`
@@ -542,8 +542,8 @@ const proxyMLRequest = async (req, res, next) => {
     serviceLogger.info(`[ML Proxy] ${req.method} ${req.originalUrl} -> ${fullUrl} (req.path: ${req.path}, targetPath: ${targetPath})`);
 
     // Increase timeout for ML routes (especially cashflow forecast which can take longer)
-    const timeout = req.originalUrl.includes('/cashflow/forecast') ? 120000 : 60000; // 2 minutes for forecast, 1 minute for other ML routes
-    
+    const timeout = req.originalUrl.includes("/cashflow/forecast") ? 120000 : 60000; // 2 minutes for forecast, 1 minute for other ML routes
+
     let response;
     try {
       response = await axios({
@@ -566,12 +566,12 @@ const proxyMLRequest = async (req, res, next) => {
       }
     } catch (axiosError) {
       // Handle axios-specific errors
-      if (axiosError.code === 'ECONNREFUSED') {
+      if (axiosError.code === "ECONNREFUSED") {
         serviceLogger.error(`[ML Service] Connection refused to ${fullUrl}. Is the ML service running?`);
         if (!res.headersSent) {
           return sendError(res, 503, "ML service is unavailable. Please try again later.", "SERVICE_UNAVAILABLE");
         }
-      } else if (axiosError.code === 'ETIMEDOUT' || axiosError.message?.includes('timeout')) {
+      } else if (axiosError.code === "ETIMEDOUT" || axiosError.message?.includes("timeout")) {
         serviceLogger.error(`[ML Service] Request timeout after ${timeout}ms for ${fullUrl}`);
         if (!res.headersSent) {
           return sendError(res, 504, "Request timeout. The ML service took too long to respond.", "TIMEOUT");
@@ -602,12 +602,12 @@ const proxyMLRequest = async (req, res, next) => {
       name: error.name,
       stack: error.stack,
     });
-    
+
     if (error.response) {
       serviceLogger.error("Response status:", error.response.status);
       serviceLogger.error("Response data:", error.response.data);
     }
-    
+
     if (!res.headersSent) {
       return sendInternalError(res, error.message || "Internal server error");
     } else {
